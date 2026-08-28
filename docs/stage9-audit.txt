@@ -1,0 +1,115 @@
+STAGE 9 AUDIT — HARDENING PASS
+==============================
+
+28 August 2026.
+
+Evidence against `docs/threat-model.txt` §3. Each checklist item names where
+the work lives and what was measured. A tick without a path is not a pass.
+
+© Manish Jagdish Thatte
+
+------------------------------------------------------------------------------
+
+1. WRITTEN THREAT MODEL
+-----------------------
+
+  Done — `docs/threat-model.txt`. Six adversaries, assets, in/out of scope,
+  mechanisms per adversary. Revisit when a channel or renderer is added.
+
+------------------------------------------------------------------------------
+
+2. SANITISER CORPUS AUDIT
+-------------------------
+
+  Corpus: `tests/corpus/sanitise/*.html` (10 samples) — XSS script/SVG/js-URL,
+  remote pixel, CSS exfil + position escape, cid: resolve/miss, phishing form,
+  meta/base/link redirect, data: SVG/HTML, newsletter mix.
+
+  Driver: `tests/test_sanitise_corpus.py`
+    - universal refusals on every sample (no script/js-URL/handlers/form/…)
+    - named checks for remote count, cid map, newsletter link kept, etc.
+    - pinned membership set so silent corpus shrinkage fails
+
+  Unit depth remains in `tests/test_sanitise.py` (written with the sanitiser).
+  Stage 9's job was the OTHER half: samples not imagined while writing the
+  allowlist.
+
+------------------------------------------------------------------------------
+
+3. SECRET / TOKEN HANDLING END TO END
+-------------------------------------
+
+  Mechanisms already in tree (behavioural tests in `tests/test_auth.py`):
+    - keyring only (`secrets/store.py`); Credential / TokenSet `__repr__` redact
+    - `credentials.resolve` → `oauth.refresh_token` → `set_tokens` (rotation)
+    - OAuth loopback 127.0.0.1, PKCE, state via compare_digest
+
+  Stage 9 mechanical pins (`tests/test_stage9_audit.py`):
+    - repr redaction still true for Credential and TokenSet
+    - no production `log.*(… password|access_token|refresh_token=…)` pattern
+    - `resolve` source still contains `set_tokens` and `refresh_token`
+
+  Locked / unavailable keyring: existing `SecretUnavailable` / `available()`
+  paths; UX asks rather than invents (threat model 2.4).
+
+------------------------------------------------------------------------------
+
+4. PANEL ISOLATION REVIEW
+-------------------------
+
+  Re-read: `panels/profiles.py`, `ui/sitepanel.py`, `panels/unread.py`.
+  Behavioural: `tests/test_panels.py`.
+
+  Stage 9 pins (`tests/test_stage9_audit.py`):
+    - no `QWebChannel` / WebChannel import under `cormani/`
+    - `SitePanel` class does not grow `_store` / `_con`
+
+  Unread extraction remains title-only. Downloads cancelled → desktop open.
+  Certificates refused. One profile per site under `web_profiles`.
+
+------------------------------------------------------------------------------
+
+5. FUZZ UNTRUSTED PARSERS
+-------------------------
+
+  `tests/test_fuzz_parsers.py` — deterministic hostile blobs + seeded LCG
+  noise against `imap/envelope.read` and `calendar/itip.parse`. Must return
+  or yield None; must not take the process down. DSN-shaped multipart is in
+  the MIME list; delivery classification is already on Envelope from `read`.
+
+  Not AFL. Expanding the blob lists is the intended growth path.
+
+------------------------------------------------------------------------------
+
+6. PATH CONTAINMENT SWEEP
+-------------------------
+
+  Writers: `store/ingest.safe_filename` + `attachment_path`;
+  `store/attachments` (display_name / unique_path / AttachmentEscapes).
+  Reader cid: `ui/messageview.py` resolve + parents check under attachments
+  root. User Save As is intentional (outside the store).
+
+  Stage 9 pins: those modules still reference `safe_filename` /
+  `AttachmentEscapes`; messageview still contains the path containment check.
+
+  Unit coverage: existing tests in `tests/test_attachments.py` /
+  ingest suites.
+
+------------------------------------------------------------------------------
+
+7. DEPENDENCY / CVE WATCH
+-------------------------
+
+  Procedure: `docs/deps-watch.txt`. Measurement tool already shipped:
+  `cormani --check` (Chromium feature vs security-patch). Panels remain
+  optional when the engine ages out (toolkit-verification.txt 2 and 7).
+
+------------------------------------------------------------------------------
+
+8. PUBLICATION
+--------------
+
+The threat model binds release: packaging artefacts are built and tested
+locally first. This audit records that the Stage 9 checklist was worked on
+the tree being released; it is evidence, not a substitute for running the
+tests and the human plan in test.md (kept local).

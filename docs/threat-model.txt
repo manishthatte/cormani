@@ -1,0 +1,195 @@
+THREAT MODEL — CORMANI
+======================
+
+28 August 2026.
+
+Stage 9 of PLAN.txt: adversaries written down — what each can reach, what
+corMani undertakes to stop, what it does not, and which modules already carry
+the decision. An unwritten model is assumptions different parts of the code
+will hold differently; this file is where those can be checked.
+
+CONVENTIONS.txt §7 binds from the first commit. Stage 9 does not invent the
+rules — it audits the surface once the surface is complete.
+
+© Manish Jagdish Thatte
+
+------------------------------------------------------------------------------
+
+1. ASSETS
+---------
+
+  Asset                      Where it lives
+  -------------------------  -----------------------------------------------
+  Mail / calendar store      SQLite + attachments under XDG
+                             (`platform/paths.py`, `store/ingest.py`)
+  OAuth / app-password       System keyring (`secrets/store.py`); never
+  secrets                    config, DB, log, env, or exception text
+  Provider client id/secret  Same keyring (`auth/credentials.py`)
+  Panel sessions             One dir per site under `paths.web_profiles`
+                             (`panels/profiles.py` — not Qt's derived path)
+  Message HTML in reader     Transient; only after `render/sanitise.py` +
+                             `ui/messageview.py`
+  Outbound / iTIP replies    Outbox → SMTP; `calendar/invites.py`
+  Desktop notifications      Untrusted event text (`platform/notify.py`)
+  Account config             XDG config — addresses and settings, not secrets
+
+The store and the keyring matter most. Panel sessions are next: a signed-in
+WhatsApp jar is someone else's messaging identity on this disk.
+
+------------------------------------------------------------------------------
+
+2. ADVERSARIES
+--------------
+
+2.1 Hostile sender (message content)
+....................................
+
+Can reach: every byte of an RFC 5322 message — HTML, MIME, filenames,
+headers, tracking URLs, cid: parts.
+
+IN SCOPE — no script/frames/external CSS/SVG-as-document in the reader; no
+network from opening mail until remote content is asked for; attachment names
+cannot escape the attachments root; links do not navigate inside the pane.
+
+OUT OF SCOPE — social engineering a willing open/click outside corMani;
+DKIM/SPF/DMARC authenticity UI (useful, not this model's payload job).
+
+MECHANISMS — `render/sanitise.py` (allowlist, remote withheld, CSP on
+`document()`, CSS without url()/expression()); `ui/messageview.py`
+(QTextBrowser — no script engine or network stack; `loadResource` only;
+`setOpenLinks(False)`); `ui/reader.py` (remote off until asked);
+`store/ingest.safe_filename` + `attachment_path` resolve-and-contain.
+
+2.2 Compromised messaging site in a panel
+.........................................
+
+Can reach: full JS and network inside that site's QWebEngineProfile; whatever
+the page can do as that site's signed-in user.
+
+IN SCOPE — no QWebChannel/bridge into store or keyring; one profile per site,
+no shared jar; no local-file access from network content; no silent
+permissions; panel downloads do not write themselves to disk; panels stay
+optional if Chromium ages out (toolkit-verification.txt findings 2 and 7).
+
+OUT OF SCOPE — stopping the site from abusing its own session; shipping a
+current Chromium (Debian pins QtWebEngine; security-patch version vs feature
+version is a known no-vendoring cost).
+
+MECHANISMS — `panels/profiles.py` (named profiles under web_profiles/cache;
+WebRTC public-interfaces-only; screen capture / canvas readback / local file
+URLs / clipboard JS off; permissions AskEveryTime); `ui/sitepanel.py` (no DB
+connection; permissions refused; downloads cancelled →
+`platform/desktop.open_url`; certificate errors refused; popups to desktop
+browser); `panels/unread.py` (only extraction: a number from the tab title).
+
+2.3 Brief physical access to the unlocked laptop
+................................................
+
+Can reach: the logged-in session — running window, unlocked keyring, XDG
+tree, panel sessions in memory and on disk.
+
+IN SCOPE — corMani never writes secrets into config, DB, logs, crash paths,
+or env; no credential in notifications or shell strings.
+
+OUT OF SCOPE — an unlocked session with the app open (the person at the
+keyboard is the user); screen lock / FDE are the OS's job; shoulder-surfing.
+
+MECHANISMS — `secrets/store.py`; `Credential.__repr__` redacts;
+`auth/oauth.py` binds 127.0.0.1 only, PKCE + `state` via `compare_digest`;
+`platform/notify.py` argv arrays (`--` before title/body); importers
+read-only (CONVENTIONS.txt §7).
+
+2.4 Locked laptop / stolen disk
+...............................
+
+Can reach: filesystem contents not covered by OS encryption or a locked
+keyring — SQLite store, attachments, panel profile directories.
+
+IN SCOPE — secrets are not in those files; honest behaviour when the keyring
+is locked or absent (`SecretUnavailable` / `available()` — ask, never invent).
+
+OUT OF SCOPE — encrypting the mail store inside corMani (plaintext SQLite by
+design; protection is disk encryption and permissions — application-level
+encryption without a real key story is theatre); panel cookie jars on disk
+(same OS boundary; `profiles.forget` clears on sign-out).
+
+MECHANISMS — `secrets/store.py`; `auth/credentials.py` (refresh / access /
+password; provider secrets under `provider:`); XDG only (`platform/paths.py`).
+
+2.5 Malicious calendar invitation / iTIP
+........................................
+
+Can reach: `text/calendar` parts; SUMMARY/DESCRIPTION in UI or notifications;
+parser edge cases (folding, escaping, huge calendars); ATTACH/URL if acted on.
+
+IN SCOPE — parse must not crash or write attacker paths; notify text as argv
+only; accept/decline yields a controlled REPLY, not execution of content.
+
+OUT OF SCOPE — auto-trusting METHOD:REQUEST without a UI decision; full RFC
+5545/5546 (no recurrence expansion — migration 6 / `itip.py`); wrong times
+from unknown TZIDs are honesty (CONVENTIONS.txt §8), not RCE.
+
+MECHANISMS — `calendar/itip.py` (hand parser, first VEVENT, no shell/network);
+`calendar/invites.py` (controlled reply path); `platform/notify.py` (gdbus
+containers are literals, not event-derived GVariant syntax).
+
+2.6 Network observer / evil IMAP or SMTP server
+...............................................
+
+Can reach: cleartext if TLS fails open; mailbox/credentials if the wrong
+endpoint is trusted or TLS is downgraded; injected message bytes (then 2.1).
+
+IN SCOPE — TLS with verification by default; OAuth redirect never on 0.0.0.0;
+fetched bytes still hit sanitiser and path containment.
+
+OUT OF SCOPE — a compromised legitimate provider; traffic-analysis metadata;
+user-configured non-TLS ports (shipped providers use implicit TLS or
+required STARTTLS).
+
+MECHANISMS — `imap/client.py`, `smtp/client.py`
+(`ssl.create_default_context()`, STARTTLS required on 587); `auth/oauth.py`
+loopback + PKCE; same ingest/sanitise path as 2.1.
+
+------------------------------------------------------------------------------
+
+3. STAGE 9 CHECKLIST (WORKED — 28 AUG 2026)
+-------------------------------------------
+
+Maps to PLAN.txt Stage 9. Not "first thought of security" — the pass that
+needs a finished surface. Evidence: `docs/stage9-audit.txt`.
+
+  [x] Written threat model — this file; revisit when a channel or renderer
+      is added.
+  [x] Sanitiser corpus audit — `tests/corpus/sanitise/` +
+      `tests/test_sanitise_corpus.py` (unit depth remains in
+      `tests/test_sanitise.py`).
+  [x] Secret / token handling end to end — redaction, no log-field pattern,
+      refresh rotation via `set_tokens` (`tests/test_stage9_audit.py` +
+      `tests/test_auth.py`).
+  [x] Panel isolation review — no QWebChannel import; SitePanel holds no
+      store; behavioural coverage in `tests/test_panels.py`.
+  [x] Fuzz untrusted parsers — `tests/test_fuzz_parsers.py` (MIME /
+      envelope, iCalendar, DSN-shaped multipart).
+  [x] Path containment sweep — ingest / attachments / messageview pins in
+      `tests/test_stage9_audit.py`; unit coverage elsewhere.
+  [x] Dependency / CVE watch — `docs/deps-watch.txt`; measure with
+      `cormani --check` (feature + security-patch).
+
+------------------------------------------------------------------------------
+
+4. PUBLICATION RULE
+-------------------
+
+Stage 8's .deb and AppImage are for local installation and validation.
+Nothing is published or handed to another person until this checklist has
+passed on the build that is being released.
+
+------------------------------------------------------------------------------
+
+5. WHAT THIS MODEL IS NOT
+-------------------------
+
+Not a penetration-test report and not a promise that every listed mechanism
+is free of bugs. It is the agreement about who the adversary is and where the
+line is drawn, so an audit has something to disagree with rather than a fog
+of unstated hopes.

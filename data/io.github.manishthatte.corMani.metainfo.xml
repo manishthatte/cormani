@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- © Manish Jagdish Thatte -->
+<component type="desktop-application">
+  <id>io.github.manishthatte.corMani</id>
+  <name>corMani</name>
+  <summary>Mail, calendar and correspondence across every channel</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.manishthatte">
+    <name>Manish Jagdish Thatte</name>
+  </developer>
+
+  <description>
+    <p>
+      corMani is a desktop correspondence client. It handles many mail accounts
+      at once over IMAP and SMTP, with calendars alongside them, and keeps
+      track of which conversations are owed a reply and which carry a deadline
+      that cannot slip.
+    </p>
+    <p>
+      Messaging services that publish no interface for personal conversations —
+      WhatsApp, LinkedIn, X, Facebook — appear as panels in the same window, so
+      that everything arrives in one place even where integration is not
+      possible. corMani is honest about the difference: it never presents a
+      panel as though its contents were searchable.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Many accounts, unified or separately, with an order you choose</li>
+      <li>Full-text search across every message, offline</li>
+      <li>Threading that survives a correspondent changing the subject</li>
+      <li>Calendars, read and write, with invitations answerable in place</li>
+      <li>Credentials in the system keyring, never on disk</li>
+      <li>Remote content in a message blocked until you ask for it</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">cormani.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+
+  <categories>
+    <category>Network</category>
+    <category>Email</category>
+    <category>Office</category>
+  </categories>
+
+  <url type="homepage">https://github.com/manishthatte/cormani</url>
+  <url type="bugtracker">https://github.com/manishthatte/cormani/issues</url>
+
+  <provides>
+    <binary>cormani</binary>
+  </provides>
+
+  <releases>
+    <release version="0.1.0" date="2026-08-25" type="development">
+      <description>
+        <p>Foundations: packaging, storage, configuration and the application shell.</p>
+      </description>
+    </release>
+  </releases>
+</component>

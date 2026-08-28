@@ -1,0 +1,48 @@
+# corMani — build and runtime artefacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local state: the mail store, the database, tokens, logs.
+# NONE of this belongs in the repository — it is correspondence, and the
+# database is rebuildable from the accounts themselves.
+#
+# `data/*` and not `data/`, and the difference is not cosmetic. `data/` ignores
+# the DIRECTORY, and git will not un-ignore a file inside an ignored directory
+# however many negations follow — so the three packaging assets below were
+# silently excluded from every commit since stage 0. They existed on this
+# machine, the test asserting their presence passed, and a fresh clone had
+# none of them: no icon, no launcher, nothing for a Debian package to install.
+# Ignoring the CONTENTS instead is what makes the exceptions possible.
+data/*
+!data/cormani.svg
+!data/cormani.desktop
+!data/*.metainfo.xml
+*.sqlite3
+*.sqlite3-*
+*.mbox
+*.eml
+secrets.toml
+google.txt
+test.md
+cormani.local.toml
+tokens/
+logs/
+
+# Local working documents — author's machine, not the published tree.
+# PLAN and SESSION_STATE are handoff notes; docs/accounts.txt holds real
+# addresses; docs/imap.txt and toolkit-verification.txt are engineering notes.
+PLAN.txt
+SESSION_STATE.txt
+CONVENTIONS.txt
+docs/accounts.txt
+docs/imap.txt
+docs/toolkit-verification.txt
+PUBLIC-RELEASE-AUDIT.txt

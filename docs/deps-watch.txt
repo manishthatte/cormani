@@ -1,0 +1,85 @@
+DEPENDENCY / CVE WATCH — CORMANI
+================================
+
+28 August 2026. Stage 9 of PLAN.txt.
+
+What this installation depends on for security-sensitive behaviour, how to
+notice it ageing, and what corMani does when the risk is the engine rather
+than a Python package. Not a scanner — CONVENTIONS.txt §3 forbids vendoring
+one, and Debian's security tracker is the authority for packages this build
+actually ships.
+
+© Manish Jagdish Thatte
+
+------------------------------------------------------------------------------
+
+1. WHAT TO WATCH
+----------------
+
+  Component              How it arrives              What fails if it ages
+  ---------------------  --------------------------  ---------------------------
+  PySide6 / Qt           system or pip               UI, trays, dialogs
+  QtWebEngine / Chromium system QtWebEngine          panels (sites without API)
+  Python stdlib          system Python               TLS, IMAP, MIME, sqlite3
+  keyring                dependency of the package   OAuth / app-password store
+  BeautifulSoup / html*  if present for sanitise     message HTML (confirm in
+                                                     pyproject / packaging)
+
+`cormani --check` already prints the Chromium *feature* version and the
+*security-patch* version as two numbers. They diverge on Debian: the feature
+train lags Google's, the security-patch train is what Debian backports. A
+watch that only looks at the feature string will declare the engine obsolete
+while the security-relevant number is still current — or the reverse. Read
+both.
+
+------------------------------------------------------------------------------
+
+2. RHYTHM
+---------
+
+  When                          What
+  ----------------------------  ----------------------------------------------
+  Before any release or hand-   Run `python3 -m cormani --check`; record both
+  off to another machine        Chromium numbers beside the package versions
+                                of PySide6 and keyring.
+  After a distro security       Re-run `--check`. If panels are still offered
+  update to qtwebengine         and the security-patch version moved, nothing
+                                else is required of corMani.
+  When the security-patch       Leave panels optional. The rest of the client
+  train stops moving and the    (mail, calendar, compose, sync) must keep
+  open CVEs are mail-relevant   working with WebEngine absent — that is
+  (toolkit-verification.txt     toolkit finding 7 and threat model 2.2.
+  findings 2 and 7)
+  When keyring or PySide6       Read the Debian tracker / upstream advisory;
+  has a CVE                     corMani does not vendor either, so the fix is
+                                a distro or pip upgrade, then a smoke of
+                                `--demo` and one OAuth refresh if tokens exist.
+
+Do not paste token material, crash dumps, or keyring contents into a watch
+note. Versions and CVE ids are enough.
+
+------------------------------------------------------------------------------
+
+3. RECORD (TEMPLATE)
+--------------------
+
+Fill after `python3 -m cormani --check` on the build host before hand-off:
+
+  Host OS:
+  Python:
+  PySide6:
+  QtWebEngine feature:
+  QtWebEngine sec:
+  keyring:
+
+Do not paste token material, crash dumps, or keyring contents here.
+
+------------------------------------------------------------------------------
+
+4. OUT OF SCOPE FOR THIS FILE
+-----------------------------
+
+Scanning every transitive wheel. Pinning Chromium inside the AppImage (that
+is a packaging choice with its own threat — Stage 8's scaffold does not
+bundle a private browser). Encrypting the mail store. Those are elsewhere in
+the threat model.

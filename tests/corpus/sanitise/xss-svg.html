@@ -1,0 +1,2 @@
+<!-- XSS: SVG as document with onload. Expect: no onload, no alert. -->
+<svg onload="alert(1)"><script>alert(2)</script></svg><p>kept</p>

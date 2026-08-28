@@ -1,0 +1,8 @@
+#!/usr/bin/make -f
+# © Manish Jagdish Thatte
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+export PYBUILD_NAME = cormani
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild

@@ -1,0 +1,32 @@
+corMani — a correspondence client.
+
+© Manish Jagdish Thatte
+
+Licensed under the GNU General Public License, version 3 or (at your option)
+any later version. The full text is in LICENSE.
+
+    This program is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by the Free
+    Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    This program is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+    for more details.
+
+    You should have received a copy of the GNU General Public License along
+    with this program. If not, see <https://www.gnu.org/licenses/>.
+
+A COMMERCIAL LICENCE IS AVAILABLE.
+
+Copyright in the whole of this work is held solely by Manish Jagdish Thatte,
+so the work may also be licensed on other terms. Anyone who cannot accept the
+obligations of the GPL — a proprietary redistributor, for instance — may
+enquire about a commercial licence instead.
+
+Every source file carries `SPDX-License-Identifier: GPL-3.0-or-later`.
+
+Third-party components are not vendored. corMani depends on the Python
+standard library, PySide6 (LGPL-3) and python3-keyring, each obtained from the
+distribution rather than bundled.

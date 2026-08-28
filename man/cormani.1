@@ -1,0 +1,373 @@
+.\" © Manish Jagdish Thatte
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.TH CORMANI 1 "26 August 2026" "corMani 0.1.0" "User Commands"
+.SH NAME
+cormani \- correspondence client for mail, calendar and messaging sites
+.SH SYNOPSIS
+.B cormani
+.RI [ options ]
+.SH DESCRIPTION
+.B corMani
+is a desktop correspondence client. It handles many mail accounts over IMAP and
+SMTP, with calendars alongside them, and tracks which conversations are owed a
+reply and which carry a deadline.
+.PP
+Messaging services that publish no interface for personal conversations appear
+as panels in the same window. Their contents are not searchable and
+.B corMani
+does not pretend otherwise.
+.SH OPTIONS
+.TP
+.B \-\-check
+Report the state of this installation \(em interpreter, toolkit, keyring,
+store, calendars and tracked conversations \(em then exit. Requires no
+display, and is the first thing to run when something is wrong.
+.TP
+.BI \-\-add\-account " ADDRESS"
+Add one account. Asks for an app password, or opens a browser for OAuth,
+connects to the server, and writes the account only once the credential has
+been accepted \(em so a failed attempt leaves nothing behind. Use
+.B \-\-provider
+with anything but a well-known consumer address: a custom domain says nothing
+about who hosts it.
+.IP
+The window offers the same thing at
+.B File \(-> Add mail account
+and it is the same code on a worker thread, so the two cannot disagree about
+what adding an account means. The command line remains the right place for a
+FIRST import, which runs for hours and survives the window being closed.
+.TP
+.BI \-\-provider " google|microsoft|imap"
+Which provider an address belongs to. Inferred for consumer domains only.
+.TP
+.BI \-\-auth " oauth2|password"
+How to authenticate. Defaults to OAuth where the provider offers it. Google
+still accepts an app password for mail; Microsoft accepts none.
+.TP
+.BI \-\-name " TEXT"
+The display name to send with mail from this account. Defaults to the part of
+the address before the at sign.
+.TP
+.BI \-\-imap\-host " HOST"
+.TQ
+.BI \-\-imap\-port " PORT"
+.TQ
+.BI \-\-smtp\-host " HOST"
+.TQ
+.BI \-\-smtp\-port " PORT"
+Where to reach a server that is not a known provider's, for
+.BI \-\-provider " imap"
+\(em a university, a hosting company, a mail server of your own. Known
+providers set all four from
+.IR auth/providers.py ,
+so these are needed only when nothing else knows the answer.
+.TP
+.BI \-\-resync " ADDRESS"
+Discard one account's cached messages so that the next
+.B \-\-sync
+fetches them again. A sync is incremental by design and never revisits a
+message once the folder's UIDNEXT has moved past it, which is right almost
+always and wrong in one case: a parser fixed after the message was stored.
+Refused while the account has changes not yet sent to the server.
+.TP
+.BI \-\-set\-oauth " PROVIDER"
+Record this installation's own OAuth client id and secret. One registration
+covers every account on that provider, and it is held in the system keyring.
+.TP
+.BI \-\-import\-thunderbird " [PATH]"
+Copy mail from a Thunderbird profile into a corMani account. The source is
+opened read\-only \(em Thunderbird may stay running. With no PATH, looks under
+.IR ~/.thunderbird .
+Requires
+.BR \-\-into .
+Junk and Trash are skipped unless
+.B \-\-include\-junk
+is given. Incremental: a second run only reads bytes appended since the last.
+.TP
+.BI \-\-into " ADDRESS"
+With
+.BR \-\-import\-thunderbird ,
+the configured account that receives the imported mail. Required, because
+Thunderbird's on\-disk account names are server directories rather than
+addresses.
+.TP
+.B \-\-include\-junk
+With
+.BR \-\-import\-thunderbird ,
+also import Junk and Trash folders.
+.TP
+.BR \-\-sync " [" all | mail | calendars ]
+Fetch once and exit, without opening a window \(em mail and calendars both,
+which is what
+.B F5
+does in the window. Every account that is due is contacted in turn, changes
+made offline are sent first, and what the server holds is stored. A first
+import of a large account takes hours and is deliberately resumable: each pass
+takes a bounded number of messages and says how many remain, so running this
+repeatedly finishes the job. Name one half to run only that half \(em useful
+because the mail import takes hours and the calendars take seconds. Requires no
+display.
+.TP
+.BI \-\-calendars " [ADDRESS]"
+Report every calendar this store knows about and exit: what each holds, which
+window of dates has been fetched, whether the next pass will ask only what
+changed or fetch the whole window again, and which are parked and why. The next
+fortnight's events are listed under it, with all-day events marked as such.
+Read-only and offline, like
+.BR \-\-check ,
+and never prints a sync token's value. Name an address to narrow it to one
+account.
+.TP
+.BI \-\-filters " [ADDRESS]"
+Report every filter rule and exit, in the order they run: what each one looks
+at, what it does, whether it stops the run, and how many times it has matched
+anything. Read-only and offline, like
+.BR \-\-check ,
+and it changes nothing \(em running the rules again over mail already stored is
+done from the interface, where the result can be seen and taken back. Name an
+address to narrow it to the rules that run against that account, which includes
+every rule not tied to one account at all.
+.PP
+The match counts are the reason this exists. A filter is invisible when it works
+and invisible when it does not, so a rule that stopped matching \(em because a
+correspondent changed their address, or a folder was renamed \(em looks exactly
+like a rule that had nothing to match. The count and the date of the last match
+are the only evidence, and rules that have never matched anything are named
+here and counted by
+.BR \-\-check .
+.TP
+.B \-\-searches
+Report every saved search and exit: what each one asks for, whether it is drawn
+in the rail or kept in the Search menu only, and how much mail it holds right
+now. Read-only and offline, like
+.BR \-\-check .
+No address is taken, because a saved search is not scoped to an account \(em its
+own scope may name one, but that is part of what the search asks rather than a
+way of narrowing this list.
+.PP
+One of the three numbers is the reason this exists, and it is the last. A saved
+search whose folder was deleted, whose account was removed or whose tag was
+dropped still draws in the rail, and draws as empty \(em which is
+indistinguishable from a search that simply matches nothing today. The rail
+marks such a search and
+.B Edit \(-> Manage saved searches
+explains it, but both of those are inside the window; this is the one that works
+when the window is what is wrong.
+.PP
+A search that cannot run is kept and never deleted on the user's behalf: the
+folder comes back when the account is re\-added.
+.TP
+.BI \-\-contacts " [QUERY]"
+Report the address book and exit: everybody in it, every way of reaching each
+of them, and which cards look like the same person twice. Read-only and
+offline, like
+.BR \-\-check .
+Give a QUERY to narrow it to one name, organisation or address \(em which also
+turns on the per-contact mail counts, left out of the full list because each
+one is a scan of the message table and two hundred of them is a report nobody
+runs twice.
+.PP
+The reason this exists is that the address book is the one part of the store
+that is edited by things which are not the address book. A delivery report
+marks a handle bounced during a sync; putting somebody on a tracked thread
+creates a card for them. So the question worth asking from a terminal is what
+has happened to the contacts while nobody was looking at them, and three of
+these numbers answer it: the addresses that have bounced, the cards with no
+address at all, and the possible duplicates.
+.PP
+A duplicate is the one that matters. Two cards for one person split their
+handles between them, so the composer's bounce guard checks one and the
+tracking layer files against the other, and neither is wrong in any way the
+interface can show. They are named here and merged in
+.BR "Tools \(-> Address book" ;
+nothing is ever merged automatically, because a merge deletes a card and cannot
+be undone.
+.PP
+.B \-\-check
+also reports the tracking layer: how many conversations are being pursued, how
+many are owed a reply, every hard deadline within a month named individually,
+and how much has arrived that is on no thread. It reports the address book on
+the same terms: how many people and handles, broken down by channel, and each
+of the three states above that means something is wrong rather than merely so.
+.PP
+It reports the site panels as well: the version of the embedded browser and how
+current its security patches are, which sites are turned on, and the directory
+each site's session is kept in \(em which is what to delete to sign a site out
+from outside the application. See
+.B PANELS
+below.
+.TP
+.B \-\-reindex
+Build the derived data again from the messages already stored: the full-text
+search index, and the conversations. Neither can be repaired in place \(em an
+external-content index holds no copy of the text to check itself against, and a
+conversation is an opinion about a chain of headers \(em so the honest answer
+for derived data is to derive it again. Nothing is fetched and no message is
+changed. Run it after a change to how either is built, or if search stops
+finding something you can see.
+.TP
+.B \-\-install\-desktop
+Install the desktop entry and the icon into
+.IR $XDG_DATA_HOME ,
+so that
+.B corMani
+can be found in the applications menu and pinned. It also writes the icon
+theme's
+.I index.theme
+and rebuilds the icon cache, and says whether that worked: a cache older than
+the icon beside it is treated by GTK as authoritative, so an installation with
+every file in the right place can still produce an application with no icon.
+.TP
+.B \-\-uninstall\-desktop
+Remove what
+.B \-\-install\-desktop
+wrote. The store, the configuration and the panel sessions are untouched.
+.TP
+.B \-\-quiet
+With
+.BR \-\-sync ,
+print only the per-account summary rather than a running commentary.
+.TP
+.B \-\-demo
+Open a store of demonstration data instead of your mail, so the interface can
+be looked at before any account is configured. Mail, contacts, calendars and
+events over fifteen months \(em with the recurring ones expanded, so any week
+of that range has something in it \(em and eight tracked conversations whose
+timelines are filed from that mail by the real matchers, with the telephone
+calls and notes a mailbox cannot hold. The demo store is a separate file in the
+cache directory; your real store is not opened at all. Delete that file to
+reset it.
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.B \-h ", " \-\-help
+Print a usage summary and exit.
+.SH FILES
+.TP
+.I $XDG_CONFIG_HOME/cormani/cormani.toml
+Optional preferences. Accounts are
+.B not
+configured here; they are added in the application and held in its database,
+because the application edits them too.
+.TP
+.I $XDG_DATA_HOME/cormani/cormani.sqlite3
+The message store. Losing it loses mail that has not been re-synchronised.
+.TP
+.I $XDG_DATA_HOME/cormani/web/
+One directory per site panel, holding that site's cookies and its signed-in
+session. DATA rather than cache: deleting one signs that site out. They are
+kept apart from one another, so no site can see another's.
+.TP
+.I $XDG_CACHE_HOME/cormani/
+Disposable. Safe to delete, and not worth backing up. The
+.B \-\-demo
+store lives here, which is why it can never be confused with the real one.
+.TP
+.I $XDG_STATE_HOME/cormani/cormani.log
+The log.
+.SH TRACKING
+.B corMani
+tracks conversations rather than only messages. A THREAD here is something you
+are pursuing \(em with a state, a next action, a nudge cadence and possibly a
+deadline \(em and it holds a timeline of everything that happened on it: mail,
+and also the telephone calls, meetings and notes that a mailbox cannot contain.
+Open it with
+.B Ctrl+Shift+O
+or from the Tracking menu; it opens in a tab, and the tab's title carries the
+counts.
+.PP
+.B Owed
+is a fact and not a guess: they answered last and you have not. A call logged
+on the thread answers it, because it did. A note to yourself does not.
+.PP
+.B A deadline is not a nudge.
+A nudge is a follow-up and defaults to the last thing that happened plus the
+thread's cadence; a deadline is statutory and nothing satisfies it but the
+thing being done. They are kept apart everywhere, including on a thread that is
+blocked \(em which silences the nudge and never the deadline.
+.PP
+.B What could not be filed is shown, not dropped.
+Mail that belongs to no thread waits in a queue beside the board, narrowed by
+default to people you have written to and by a horizon, with the wider counts
+shown so nothing is hidden. Filing one message files its whole exchange and
+puts the correspondent on the thread, so the next reply arrives filed.
+.SH PANELS
+WhatsApp, LinkedIn, X and Facebook publish no interface for personal
+conversations. Not restricted, not paid \(em absent. What exists is a web
+application a person signs into, so
+.B corMani
+shows that web application in a panel and does nothing else with it: no
+reverse-engineered protocol client, and no automation that reads or sends a
+message. Both halves matter, because a protocol client gets the account banned
+and the account is the thing being protected.
+.PP
+The one exception is the unread count, and it is deliberately the smallest one:
+a single expression reads the number already in the page's title \(em the same
+characters a person reads on a browser tab \(em so the rail can carry a badge.
+It exists only while a panel is open. There is no background polling and no
+hidden page, so a site nobody has opened has no count rather than a count of
+nought.
+.PP
+Each site has its own profile: its own cookies, its own cache, its own signed-in
+session, and no way to see another's. A panel holds no connection to the message
+store, cannot reach it, and screen capture, WebRTC's local addresses, hyperlink
+auditing and reading back from a canvas are turned off. JavaScript is on \(em
+there is no site here without it \(em and that is the honest cost of the
+feature.
+.PP
+The panels are optional and are meant to stay that way. The embedded browser
+comes from the distribution rather than being bundled, so it ages between
+releases and these sites may eventually refuse it; mail and calendars are
+unaffected when that happens. Set
+.I sites
+in the configuration file to choose which appear, or to
+.I "[\(dqnone\(dq]"
+for none at all.
+.PP
+Sign a site out from the
+.B Panels
+menu, which deletes that site's stored session and cannot be undone. The same
+thing can be done from outside the application by deleting the site's directory
+under
+.IR $XDG_DATA_HOME/cormani/web/ ;
+.B \-\-check
+names them.
+.SH SECURITY
+Credentials are held in the system keyring and never written to the
+configuration file, the database, or the log.
+.PP
+Remote content in a message \(em images above all \(em is blocked until
+requested, because loading it tells the sender the message was opened.
+.PP
+Mail is fetched over TLS with certificate verification and hostname checking
+on. Downloading a message does not mark it read on the server.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+With
+.BR \-\-check ,
+the installation is not usable. With
+.BR \-\-sync ,
+at least one account failed \(em in either half, since a scheduled run asks one
+question and must get one answer \(em so that it is noticed rather than
+appearing to have worked. With
+.BR \-\-calendars ", " \-\-filters ", " \-\-searches " or " \-\-contacts ,
+there is no store, or it predates the feature being asked about. With
+.BR \-\-add\-account ,
+nothing was added. The preceding lines say why in every case.
+.TP
+.B 2
+An argument was not understood. Note that Qt's own switches take a single dash
+and are passed through; anything unrecognised with two dashes is refused rather
+than ignored.
+.SH SEE ALSO
+The plan of record and design notes are distributed with the source, in
+.I PLAN.txt
+and
+.IR docs/ .
+.SH AUTHOR
+Manish Jagdish Thatte.

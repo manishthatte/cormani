@@ -1,0 +1,31 @@
+Source: cormani
+Section: mail
+Priority: optional
+Maintainer: Manish Jagdish Thatte <manishthatte@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-sequence-python3,
+               pybuild-plugin-pyproject,
+               python3-setuptools,
+               python3-all
+Standards-Version: 4.7.0
+Homepage: https://github.com/manishthatte/cormani
+Rules-Requires-Root: no
+
+Package: cormani
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends},
+         python3-pyside6.qtwidgets,
+         python3-pyside6.qtwebenginewidgets,
+         python3-pyside6.qtsvg,
+         python3-pyside6.qtprintsupport,
+         python3-keyring
+Description: correspondence client for mail, calendar and messaging sites
+ corMani is a desktop correspondence client. It handles many mail accounts
+ over IMAP and SMTP, with calendars alongside them, and tracks which
+ conversations are owed a reply and which carry a deadline.
+ .
+ Messaging services that publish no interface for personal conversations
+ appear as panels in the same window.
+ .
+ This package is for the author's own machine until stage 9 (hardening) has
+ passed; it is not a release for other people.

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=corMani
+GenericName=Correspondence Client
+Comment=Mail, calendar and correspondence across every channel you use
+Exec=cormani %u
+Icon=cormani
+Terminal=false
+Categories=Network;Email;
+Keywords=email;mail;imap;smtp;calendar;correspondence;messaging;
+StartupNotify=true
+StartupWMClass=cormani
+MimeType=x-scheme-handler/mailto;message/rfc822;text/x-vcard;text/calendar;

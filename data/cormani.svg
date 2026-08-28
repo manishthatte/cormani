@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- corMani. © Manish Jagdish Thatte -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!--
+    THE ROOT ELEMENT MUST BEGIN WITHIN THE FIRST 256 BYTES, which is why all
+    of this sits INSIDE it rather than above it. gdk-pixbuf identifies an image
+    by sniffing a 256-byte buffer for `<svg` or `<!DOCTYPE svg`; a header
+    comment that pushes the root element past that window makes the file
+    unrecognisable — "Couldn't recognize the image file format" — and GNOME
+    then draws no icon at all. Everything else goes on saying the file is
+    fine: `file(1)` calls it an SVG, Qt's own renderer draws it, the icon
+    lookup finds it, and a test asserting it starts with `<?xml` passes. This
+    comment stood above the root and put it 1203 bytes in. Measured on this
+    machine: the root element loads at offset 256 and fails at 257.
+
+    Three strands, woven: the balanced-ternary trits of the maniTLab mark. -1 is
+    #3377BB and +1 is #CC1111, and they cross; 0 runs straight through the middle
+    and is #D4A017, a bright gold chosen over maniTLab's own #888888 so that the
+    zero reads as a thing in its own right rather than as an absence.
+
+    The form is also how the Kundalini is drawn: Ida and Pingala crossing around
+    Sushumna, the central channel that runs straight. Blue is the lunar left, red
+    the solar right, gold the channel between them. That was NOT designed in — the
+    three colours came from the balanced-ternary trits of the parent logo and the
+    weave came from the shape of a braid — but it holds exactly, and it is the
+    reason the middle strand wants to be gold rather than grey.
+
+    The ground is Solarized Light, base3 on a base2 edge, because that is the
+    surface the application itself is drawn on. The mark belongs to maniTLab; the
+    plate belongs to corMani. Do not tidy the two palettes into one.
+
+    64-unit grid, no gradients, four colours, so it renders identically at every
+    size from the panel's 16 px upward.
+  -->
+  <rect width="64" height="64" rx="13" fill="#fdf6e3" stroke="#eee8d5" stroke-width="1.5"/>
+  <g fill="none" stroke-width="6.5" stroke-linecap="round">
+    <path d="M21 11c0 10.5 22 10.5 22 21s-22 10.5-22 21" stroke="#3377BB"/>
+    <path d="M43 11c0 10.5-22 10.5-22 21s22 10.5 22 21" stroke="#CC1111"/>
+    <path d="M32 11v42" stroke="#D4A017"/>
+  </g>
+</svg>
