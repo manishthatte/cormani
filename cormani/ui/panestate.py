@@ -51,6 +51,32 @@ from .models.rail import ScopeRole
 from .tabs import ViewState
 
 
+def _mode_prefix(mode: str, label: str) -> str:
+    """Tab title with wayfinding prefix — ui.md §3.2."""
+    return f"{mode} · {label}" if label else mode
+
+
+def show_mail(pane) -> None:
+    """Return to the message list from any alternate pane."""
+    from . import panespace
+
+    for name, nothing in panespace.CLAIMANTS:
+        host = getattr(pane, name, None)
+        if host is not None and getattr(host, "showing", False):
+            host.show(nothing)
+    pane.middle.setVisible(True)
+    pane.reader.setVisible(True)
+    if pane.rail.current_key() != "unified:inbox":
+        pane.rail.select_key("unified:inbox")
+    pane.view_changed.emit()
+
+
+def showing_mail(pane) -> bool:
+    from . import panespace
+
+    return not panespace.showing(pane)
+
+
 def view_state(pane, title: str) -> ViewState:
     """Everything needed to put this pane back exactly as it is now."""
     row = pane.current_row()
@@ -110,21 +136,16 @@ def title_for_scope(pane) -> str:
     otherwise be ambiguous — four tabs called Inbox are four tabs called
     nothing."""
     if pane.showing_site():
-        return pane.sites.title()
+        return _mode_prefix("Sites", pane.sites.title())
     if pane.showing_tracking():
-        # The counts go in the TAB TITLE, which is the whole compensation for
-        # tracking being a tab rather than a rail section: a tab left open is
-        # the badge the rail does not carry.
-        return pane.tracking.title()
+        return _mode_prefix("Tracking", pane.tracking.title())
     if pane.showing_contacts():
-        # A number and not a badge, unlike tracking's: nothing in an address
-        # book becomes urgent by being ignored, so the count is context.
-        return pane.contacts.title()
+        return _mode_prefix("Contacts", pane.contacts.title())
     if pane.showing_calendar():
         index = pane.rail.currentIndex()
         label = (index.data(Qt.ItemDataRole.DisplayRole)
                  if index.isValid() else "") or "Calendar"
-        return label
+        return _mode_prefix("Calendar", label)
     # A SAVED SEARCH IS NAMED, AND ITS NAME BEATS ITS QUERY. "Invoices" says
     # more than "Search: invoice", and the person chose the first. This is
     # above the `search.active` branch for that reason and BELOW nothing else,
@@ -142,14 +163,14 @@ def title_for_scope(pane) -> str:
         # The search, not the rail row underneath it: the tab is showing
         # results, and naming it "Inbox" would be a lie about what is in it.
         asked = search.text.strip() or search.describe()
-        return f"Search: {asked}"[:40]
+        return _mode_prefix("Mail", f"Search: {asked}"[:40])
     index = pane.rail.currentIndex()
     if not index.isValid():
-        return "Mail"
+        return _mode_prefix("Mail", "Inbox")
     label = index.data(Qt.ItemDataRole.DisplayRole) or "Mail"
     scope = index.data(ScopeRole)
     if scope is not None and scope.account_id is not None:
         account = accounts_repo.get_account(pane._con, scope.account_id)
         if account is not None and account.label != label:
-            return f"{account.label} · {label}"
-    return label
+            return _mode_prefix("Mail", f"{account.label} · {label}")
+    return _mode_prefix("Mail", label)

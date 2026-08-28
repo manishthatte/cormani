@@ -141,6 +141,12 @@ def _identity_for_reply(identities, row) -> object:
     return identities[0] if identities else None
 
 
+def signature_for_reply(identities, row) -> str:
+    """The signature of the identity a reply to this message comes from."""
+    identity = _identity_for_reply(list(identities), row)
+    return identity.signature if identity else ""
+
+
 def reply(row, body: str, identities, *, all_recipients: bool = False,
           mine=(), signature: str = "") -> Draft:
     """A reply to this message, ready to be edited.

@@ -144,6 +144,11 @@ class Event:
         return (self.is_invitation
                 and self.my_response in ("", RESPONSE_NEEDS_ACTION))
 
+    @property
+    def is_series_master(self) -> bool:
+        """The recurring rule's own row, when the provider stores one."""
+        return bool(self.series_id and self.remote_id == self.series_id)
+
     def start(self, tz: dt.tzinfo | None = None) -> dt.datetime | None:
         return times.parse(self.starts_at, tz)
 

@@ -395,3 +395,24 @@ def clear_for_account(con: sqlite3.Connection, account_id: int, *,
     if commit:
         con.commit()
     return cur.rowcount
+
+
+def stuck_ops(con: sqlite3.Connection) -> list[PendingOp]:
+    """Every op that has stopped being retried."""
+    rows = con.execute(
+        "SELECT * FROM pending_op WHERE attempts >= ? ORDER BY id",
+        (MAX_ATTEMPTS,)).fetchall()
+    return [_op(r) for r in rows]
+
+
+def describe_stuck(con: sqlite3.Connection) -> str:
+    """Lines for a dialog listing stuck queue entries."""
+    from . import accounts as accounts_repo
+
+    lines = []
+    for op in stuck_ops(con):
+        account = accounts_repo.get_account(con, op.account_id)
+        name = account.label if account else f"account {op.account_id}"
+        detail = op.last_error or op.kind
+        lines.append(f"{name}: {op.kind} — {detail}")
+    return "\n".join(lines) if lines else "Nothing is stuck."

@@ -214,3 +214,63 @@ def _label(con, contact_id: int) -> str:
              if x]
     return (f"{contact.label} ({', '.join(marks)})" if marks
             else f"{contact.label} (#{contact.id}, nothing else on the card)")
+
+
+# --------------------------------------------------------------- vCard I/O
+def import_vcard(path: str) -> int:
+    """`--import-vcard PATH`: read vCard 3.0 contacts into the store."""
+    from pathlib import Path
+
+    from .app import current_paths
+    from .importer import vcard as vcard_mod
+    from .store import database
+
+    source = Path(path).expanduser()
+    if not source.is_file():
+        print(f"no such file: {source}")
+        return 1
+    paths = current_paths()
+    if not paths.database.exists():
+        print(f"no store yet ({paths.database}) — start corMani once first")
+        return 1
+    con = database.connect(paths.database)
+    try:
+        if database.schema_version(con) < ADDRESS_BOOK_SCHEMA:
+            print("this store predates the address book — start corMani once "
+                  "to migrate it")
+            return 1
+        report = vcard_mod.import_file(con, source)
+        suffix = (f", skipped {report.skipped} empty card"
+                  f"{'' if report.skipped == 1 else 's'}" if report.skipped
+                  else "")
+        print(f"imported {report.imported} contact"
+              f"{'' if report.imported == 1 else 's'}{suffix}")
+        return 0
+    finally:
+        con.close()
+
+
+def export_vcard(path: str, *, query: str = "") -> int:
+    """`--export-vcard PATH`: write the address book as vCard 3.0."""
+    from pathlib import Path
+
+    from .app import current_paths
+    from .importer import vcard as vcard_mod
+    from .store import database
+
+    dest = Path(path).expanduser()
+    paths = current_paths()
+    if not paths.database.exists():
+        print(f"no store yet ({paths.database})")
+        return 1
+    con = database.connect(paths.database, read_only=True)
+    try:
+        if database.schema_version(con) < ADDRESS_BOOK_SCHEMA:
+            print("this store predates the address book — start corMani once "
+                  "to migrate it")
+            return 1
+        count = vcard_mod.export_file(con, dest, query=query)
+        print(f"exported {count} contact{'' if count == 1 else 's'} to {dest}")
+        return 0
+    finally:
+        con.close()

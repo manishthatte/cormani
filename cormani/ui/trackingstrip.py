@@ -156,7 +156,12 @@ class TrackingStrip(QWidget):
         self.name.setText("Not on a tracked thread")
         self.standing.setText("")
         for name, button in self.buttons.items():
-            button.setVisible(name == "track")
+            if name == "track":
+                button.setVisible(True)
+                button.setDefault(True)
+                button.setAutoDefault(True)
+            else:
+                button.setVisible(False)
 
     def _draw(self, threads: list, today) -> None:
         thread = threads[0]
@@ -165,6 +170,9 @@ class TrackingStrip(QWidget):
             " · ".join(x for x in (thread.org, thread.title) if x) + others)
         self.standing.setText(self._standing(thread, today))
         for name, button in self.buttons.items():
+            if name == "track":
+                button.setDefault(False)
+                button.setAutoDefault(False)
             button.setVisible(name != "track")
         self._repaint(thread, today)
 

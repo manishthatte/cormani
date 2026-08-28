@@ -65,6 +65,17 @@ _CHANNEL_MARKS = {touches_repo.CHANNEL_PHONE: "☎", touches_repo.CHANNEL_MEETIN
                   touches_repo.CHANNEL_NOTE: "✎", "whatsapp": "w", "linkedin": "in",
                   "x": "x", "facebook": "f"}
 
+_CHANNEL_TIPS = {
+    touches_repo.CHANNEL_PHONE: "Phone call",
+    touches_repo.CHANNEL_MEETING: "Meeting",
+    touches_repo.CHANNEL_NOTE: "Note",
+    "whatsapp": "WhatsApp",
+    "linkedin": "LinkedIn",
+    "x": "X",
+    "facebook": "Facebook",
+    "email": "Email",
+}
+
 # A deadline this close is drawn in the deadline colour rather than as text.
 URGENT_DAYS = 14
 
@@ -333,6 +344,7 @@ class ThreadView(QWidget):
                 else "?"
             mark = _CHANNEL_MARKS.get(touch.channel,
                                       _ARROWS.get(touch.direction, "·"))
+            channel_tip = _CHANNEL_TIPS.get(touch.channel, touch.channel)
             who = touch.contact_name or ""
             text = f"{stamp}  {mark} {touch.title}"
             if who:
@@ -341,8 +353,12 @@ class ThreadView(QWidget):
                 text += "  — DELIVERY FAILED"
             item = QListWidgetItem(text, self.timeline)
             item.setData(Qt.ItemDataRole.UserRole, touch.id)
+            tip_lines = [channel_tip, touch.title]
+            if who:
+                tip_lines.append(who)
             if touch.body:
-                item.setToolTip(touch.body[:400])
+                tip_lines.append(touch.body[:400])
+            item.setToolTip("\n".join(tip_lines))
             if self._theme is not None and \
                     touch.status == touches_repo.STATUS_BOUNCED:
                 item.setForeground(QColor(self._theme.error))
@@ -375,6 +391,15 @@ class TrackPane(QWidget):
         self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.board = ThreadBoard(con, self.splitter)
         self.view = ThreadView(con, self.splitter)
+        self.legend = QLabel("", self)
+        self.legend.setWordWrap(True)
+        self.legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.insertWidget(0, self.legend)
+        self.empty_cta = QLabel("", self)
+        self.empty_cta.setWordWrap(True)
+        self.empty_cta.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_cta.setVisible(False)
+        outer.insertWidget(0, self.empty_cta)
         # THE QUEUE SITS BESIDE THE BOARD, which is what makes filing one
         # gesture: the thread is chosen on the left and the message on the
         # right, so "file this onto that" is two clicks already made. A queue
@@ -443,6 +468,24 @@ class TrackPane(QWidget):
             self.queue.reload()
         self.footer.setText(self._footer(today))
         self._update_queue_button()
+        self._update_empty_cta(today)
+        self._update_legend()
+
+    def _update_legend(self) -> None:
+        tips = " · ".join(f"{mark} {label}" for mark, label in (
+            ("←", "they wrote"), ("→", "you wrote"), ("·", "note"),
+            ("☎", "phone"), ("w", "WhatsApp"), ("in", "LinkedIn")))
+        self.legend.setText(f"Timeline: {tips}")
+
+    def _update_empty_cta(self, today=None) -> None:
+        counts = tracking_repo.counts(self._con, today=today)
+        empty = not counts["live"]
+        self.empty_cta.setVisible(empty)
+        if empty:
+            self.empty_cta.setText(
+                "Nothing is being tracked yet.\n"
+                "Open a message and press Track this in the reading pane, "
+                "or choose Tracking ▸ Track this message.")
 
     def _footer(self, today) -> str:
         """The counts, and the three silences told apart.
@@ -475,21 +518,23 @@ class TrackPane(QWidget):
         if theme is not None:
             self.footer.setStyleSheet(
                 f"color: {theme.text_muted}; padding: 4px 10px;")
+            self.empty_cta.setStyleSheet(
+                f"color: {theme.text_muted}; padding: 12px 20px; "
+                f"background: {theme.surface_raised}; "
+                f"border: 1px dashed {theme.border}; border-radius: 6px; "
+                f"margin: 8px;")
 
     def title(self) -> str:
-        """What the TAB says, which is where the counts live — see the header.
-
-        A tab left open is the badge the rail does not carry.
-        """
+        """What the TAB says after the Tracking · prefix."""
         counts = tracking_repo.counts(self._con)
         if not counts["live"]:
-            return "Tracking"
+            return "Board"
         marks = []
         if counts["owed"]:
             marks.append(f"{counts['owed']} owed")
         if counts["deadlines"]:
             marks.append(f"{counts['deadlines']} ⏰")
-        return f"Tracking ({' · '.join(marks)})" if marks else "Tracking"
+        return " · ".join(marks) if marks else "Board"
 
     # -------------------------------------------------------------- events
     def _chosen(self, thread_id: int) -> None:

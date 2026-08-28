@@ -536,7 +536,7 @@ class TestTabState(Host):
         self.person()
         pane = self.pane()
         pane.contacts.open()
-        self.assertEqual(pane.title_for_scope(), "Address book (1)")
+        self.assertEqual(pane.title_for_scope(), "Contacts · Address book (1)")
 
 
 if __name__ == "__main__":                                   # pragma: no cover

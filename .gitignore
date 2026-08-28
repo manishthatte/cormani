@@ -46,3 +46,6 @@ docs/accounts.txt
 docs/imap.txt
 docs/toolkit-verification.txt
 PUBLIC-RELEASE-AUDIT.txt
+enhance.txt
+ui.md
+deb-plan.md

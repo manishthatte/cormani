@@ -19,6 +19,7 @@ from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QStyleOptionViewItem
 
 from cormani.store import edits, messages, tags, views
+from cormani.ui import commands as commands_mod
 from cormani.ui import density as density_mod
 from cormani.ui import icons
 from cormani.ui import messagelist as messagelist_mod
@@ -246,29 +247,37 @@ class TestCommandBarAndReader(unittest.TestCase):
 
     def test_nothing_is_enabled_without_a_message(self):
         self.bar.set_message(None)
-        self.assertFalse(any(b.isEnabled() for b in self.bar._buttons.values()))
+        self.assertTrue(self.bar._buttons["compose"].isEnabled())
+        for command_id, button in self.bar._buttons.items():
+            if command_id == "compose":
+                continue
+            self.assertFalse(button.isEnabled(), command_id)
 
     def test_only_the_commands_that_work_become_enabled(self):
         row = messages.fetch(self.con, views.Scope(), limit=1)[0]
         self.bar.set_message(row)
         for command_id, button in self.bar._buttons.items():
-            self.assertEqual(button.isEnabled(), self.bar._ready[command_id],
-                             command_id)
+            needs_message = command_id != "compose"
+            ready = commands_mod.command_ready(command_id)
+            expected = ready and (row is not None or not needs_message)
+            self.assertEqual(button.isEnabled(), expected, command_id)
         self.assertTrue(self.bar._buttons["archive"].isEnabled())
-        self.assertFalse(self.bar._buttons["reply"].isEnabled())
+        self.assertTrue(self.bar._buttons["reply"].isEnabled())
+        self.assertTrue(self.bar._buttons["compose"].isEnabled())
 
-    def test_a_command_that_is_not_ready_says_which_stage_brings_it(self):
+    def test_a_command_that_is_not_ready_names_why(self):
         from cormani.ui.commandbar import COMMANDS
-        for command_id, _label, _glyph, ready, _primary, tip in COMMANDS:
-            if command_id and not ready:
-                self.assertIn("stage", tip.lower(), command_id)
+        for command_id, _label, _glyph, _primary in COMMANDS:
+            if command_id and not commands_mod.command_ready(command_id):
+                tip = commands_mod.command_tooltip(command_id)
+                self.assertTrue(tip, command_id)
 
     def test_the_three_reply_commands_keep_their_labels(self):
         # PLAN.txt §2 asks for these as buttons rather than a menu; a button
         # whose label was dropped to save room is halfway back to a menu.
         from cormani.ui.commandbar import COMMANDS
-        primary = {c for c, _l, _g, _r, p, _t in COMMANDS if c and p}
-        self.assertEqual(primary, {"reply", "reply_all", "forward"})
+        primary = {c for c, _l, _g, p in COMMANDS if c and p}
+        self.assertEqual(primary, {"compose", "reply", "reply_all", "forward"})
 
     def test_the_two_toggles_are_relabelled_by_the_message(self):
         row = messages.fetch(self.con, views.Scope(), limit=1)[0]

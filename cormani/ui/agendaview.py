@@ -151,7 +151,10 @@ class _List(CalendarViewBase):
         left = 26 + TIME_WIDTH
         width = max(self.width() - left - 12, 40)
         metrics = painter.fontMetrics()
-        painter.setPen(self._pen("text_strong"))
+        start = event.start(self._tz)
+        on_deadline = (start is not None
+                       and start.date().isoformat() in self._deadline_dates)
+        painter.setPen(self._pen("deadline" if on_deadline else "text_strong"))
         font = QFont(painter.font())
         font.setItalic(bool(event.pending))
         painter.setFont(font)

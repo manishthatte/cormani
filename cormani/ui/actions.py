@@ -39,7 +39,10 @@ from ..store import tags as tags_repo
 from ..store import undo as undo_repo
 from ..store import views as views_repo
 from . import composer as composer_mod
+from . import commands as commands_mod
+from . import printmessage as printmessage_mod
 from . import shortcuts as shortcuts_mod
+from . import snoozedialog as snoozedialog_mod
 
 # How far back undo reaches. A session's worth of triage rather than a history:
 # what a person wants back is the thing they just did and, occasionally, the two
@@ -49,13 +52,7 @@ UNDO_DEPTH = 20
 # Commands whose implementation belongs to a later stage. Named here rather
 # than scattered, so the interface says the same thing wherever one is reached
 # from — a hover button, the command bar or a key.
-_NOT_READY = {
-    # Snooze is TRIAGE, and triage is stage 6 with the tracking layer — it is
-    # "bring this back on Thursday", which needs somewhere to keep a deadline
-    # and something to bring it back INTO. It said stage 4 until stage 4 was
-    # written and turned out to be about composing.
-    "snooze": "Snooze arrives with stage 6, with the tracking layer.",
-}
+_NOT_READY: dict[str, str] = {}
 
 # Commands that open a window rather than changing a message. They take the
 # CURRENT row rather than the selection: a reply is to one message, and a reply
@@ -78,8 +75,26 @@ class Actions:
         self.composers: list = []
 
     def run(self, action_id: str, message_ids: list[int]) -> None:
+        if action_id == "compose":
+            action_id = "new"
         if action_id in _NOT_READY:
             self.pane.status_message.emit(_NOT_READY[action_id])
+            return
+        if not commands_mod.command_ready(action_id):
+            self.pane.status_message.emit(
+                commands_mod.command_not_ready_message(action_id))
+            return
+        if action_id == "print":
+            self._print(message_ids)
+            return
+        if action_id == "export_pdf":
+            self._export_pdf(message_ids)
+            return
+        if action_id == "snooze":
+            if not message_ids:
+                self.pane.status_message.emit("No message selected")
+                return
+            self._snooze(message_ids)
             return
         if action_id in _COMPOSING:
             self.pane.compose(action_id, message_ids[0] if message_ids else None)
@@ -145,6 +160,16 @@ class Actions:
                 f"{', '.join(names)}")
         else:
             self.pane.status_message.emit(f"{verb} {moved}")
+
+    def _snooze(self, message_ids: list[int], fallback) -> None:
+        until = snoozedialog_mod.ask(self.pane)
+        if not until:
+            return
+        edits_repo.snooze(self.pane._con, message_ids, until)
+        when = until.replace("T", " ").replace("+00:00", " UTC")
+        self.pane.status_message.emit(
+            f"Snoozed {len(message_ids)} until {when}")
+        self._after(message_ids, fallback)
 
     def _apply_tag(self, key: int, message_ids: list[int]) -> None:
         tag = tags_repo.by_shortcut(self.pane._con, key)
@@ -362,6 +387,69 @@ class Actions:
             self.pane.list.select_message(touched[0])
         self.pane.status_message.emit(f"Undone — {step.label.lower()}")
         return True
+
+    def _print(self, message_ids: list[int]) -> None:
+        if not message_ids:
+            self.pane.status_message.emit("No message selected")
+            return
+        row = messages_repo.get_row(self.pane._con, message_ids[0])
+        if row is None:
+            return
+        plain, html = messages_repo.bodies_of(self.pane._con, row.id)
+        from .reader import format_full_date
+        printed = printmessage_mod.print_message(
+            subject=row.subject_label,
+            correspondent=row.correspondent,
+            when=format_full_date(row.date_at),
+            body_html=html or "",
+            body_plain=plain or "",
+            parent=self.pane)
+        if printed:
+            self.pane.status_message.emit("Sent to the printer")
+
+    def _export_pdf(self, message_ids: list[int]) -> None:
+        if not message_ids:
+            self.pane.status_message.emit("No message selected")
+            return
+        row = messages_repo.get_row(self.pane._con, message_ids[0])
+        if row is None:
+            return
+        from PySide6.QtWidgets import QFileDialog
+
+        path, _ = QFileDialog.getSaveFileName(
+            self.pane, "Export as PDF", f"{row.subject_label[:40] or 'message'}.pdf",
+            "PDF files (*.pdf);;All files (*)")
+        if not path:
+            return
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+        plain, html = messages_repo.bodies_of(self.pane._con, row.id)
+        from .reader import format_full_date
+        printmessage_mod.export_pdf(
+            subject=row.subject_label,
+            correspondent=row.correspondent,
+            when=format_full_date(row.date_at),
+            body_html=html or "",
+            body_plain=plain or "",
+            path=path,
+            parent=self.pane)
+        self.pane.status_message.emit(f"Saved to {path}")
+
+    def _snooze(self, message_ids: list[int]) -> None:
+        if not message_ids:
+            self.pane.status_message.emit("No message selected")
+            return
+        if not commands_mod.command_ready("snooze"):
+            self.pane.status_message.emit(
+                commands_mod.command_not_ready_message("snooze"))
+            return
+        from . import snoozedialog as snoozedialog_mod
+        until = snoozedialog_mod.ask(self.pane)
+        if not until:
+            return
+        edits_repo.snooze(self.pane._con, message_ids, until)
+        self.pane.status_message.emit(f"Snoozed {len(message_ids)}")
+        self._after(message_ids, self.pane.list.cursor_place())
 
 
 def _signature_of(identities, row) -> str:

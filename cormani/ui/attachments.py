@@ -138,7 +138,11 @@ class AttachmentStrip(QWidget):
             return
 
         count = len(self._parts)
-        self.caption.setText("Attachment:" if count == 1 else f"{count} attachments:")
+        total_bytes = sum(int(row["size_bytes"] or 0) for row, _ in self._parts)
+        size_note = att.human_size(total_bytes)
+        self.caption.setText(
+            "Attachment:" if count == 1
+            else f"{count} attachments · {size_note} total:")
         for position, (row, index) in enumerate(self._parts):
             self._buttons.append(self._chip(row, index, position))
         self.save_all_button.setVisible(count > 1)

@@ -23,7 +23,8 @@
 # © Manish Jagdish Thatte
 from __future__ import annotations
 
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from .. import APP_NAME
@@ -70,7 +71,29 @@ class Tray:
         return self._icon.isVisible()
 
     def set_unread(self, count: int) -> None:
-        """The tooltip is the badge. Qt has no numeric overlay on every desktop."""
+        """Draw the count on the icon when there is one; tooltip always says it."""
+        icon = app_icon()
+        if count > 0:
+            pixmap = icon.pixmap(32, 32)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            badge = str(count) if count < 1000 else "999+"
+            radius = 9
+            cx, cy = pixmap.width() - radius - 1, radius + 1
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor("#c62828"))
+            painter.drawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(7 if len(badge) < 3 else 6)
+            painter.setFont(font)
+            painter.setPen(QColor("#ffffff"))
+            painter.drawText(cx - radius, cy - radius, radius * 2, radius * 2,
+                             int(Qt.AlignmentFlag.AlignCenter), badge)
+            painter.end()
+            self._icon.setIcon(QIcon(pixmap))
+        else:
+            self._icon.setIcon(icon)
         if count <= 0:
             self._icon.setToolTip(APP_NAME)
         elif count == 1:

@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton,
 
 from ..store import calendars as calendars_repo
 from ..store import events as events_repo
+from ..store import tracking as tracking_repo
 from ..store import times
 from .agendaview import _List
 
@@ -98,6 +99,10 @@ class AgendaPane(QWidget):
         self.list.set_timezone(self._tz)
         self.list.set_span(start, end)
         self.list.set_events(events, known)
+        today_date = now.date()
+        deadlines = tracking_repo.deadlines(self._con, today=today_date)
+        self.list.set_deadline_dates(
+            {t.deadline_date for t in deadlines if t.deadline_date})
         self.title.setText(now.strftime("%A, %d %B"))
         self.footer.setText(self._footer(events, ids, now))
 

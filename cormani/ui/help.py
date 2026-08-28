@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QLabel, QTextBrowser,
 
 from .. import APP_NAME, __version__
 from . import shortcuts as shortcuts_mod
+from . import commands as commands_mod
 
 _SCOPE_TITLES = {
     shortcuts_mod.SCOPE_WINDOW: "Anywhere in the window",
@@ -32,9 +33,26 @@ def shortcut_lines() -> list[tuple[str, str, str, bool]]:
     out = []
     for scope in (shortcuts_mod.SCOPE_WINDOW, shortcuts_mod.SCOPE_LIST):
         for shortcut in shortcuts_mod.in_scope(scope):
+            ready = (commands_mod.command_ready(shortcut.id)
+                     if commands_mod.known(shortcut.id)
+                     else shortcut.ready)
             out.append((_SCOPE_TITLES[scope], shortcut.key,
-                        shortcut.description, shortcut.ready))
+                        shortcut.description, ready))
     return out
+
+
+def _search_help_html() -> str:
+    return (
+        "<p style='margin-top:16px'><b>Search language</b></p>"
+        "<ul>"
+        "<li>Terms are combined with <b>AND</b> — there is no OR operator.</li>"
+        "<li><code>from:</code> <code>to:</code> <code>subject:</code> "
+        "<code>tag:</code> and <code>in:</code> narrow a query.</li>"
+        "<li><code>before:</code> and <code>after:</code> accept dates; "
+        "the Date chip also offers a custom range.</li>"
+        "<li>Attachment filenames are indexed — search for a file name "
+        "to find messages that carry it.</li>"
+        "</ul>")
 
 
 class ShortcutsDialog(QDialog):
@@ -59,7 +77,8 @@ class ShortcutsDialog(QDialog):
             rows.append(
                 f"<tr><td style='padding:2px 18px 2px 0'><code>{key}</code></td>"
                 f"<td>{description}{note}</td></tr>")
-        view.setHtml("<table>" + "".join(rows) + "</table>")
+        view.setHtml("<table>" + "".join(rows) + "</table>"
+                     + _search_help_html())
         layout.addWidget(view)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)

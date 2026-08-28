@@ -257,6 +257,9 @@ def run(argv: list[str] | None = None, *, demo: bool = False) -> int:
         from .ui.syncing import SyncController
         window.attach_sync(SyncController(
             paths.database, options_from(cfg, paths), parent=window))
+        window.attach_autosync(database_path=paths.database,
+                               options=options_from(cfg, paths),
+                               interval_minutes=cfg.sync_interval_minutes)
         # The calendar has its own controller and its own back-off:
         # `ui/calsyncing.py` records why the two are not one.
         from .calendar.engine import Options as CalendarOptions
@@ -273,6 +276,9 @@ def run(argv: list[str] | None = None, *, demo: bool = False) -> int:
         f"schema v{database.schema_version(con)} · {counts} accounts")
     window.set_engine_note(f"Embedded browser: Chromium {engine['chrome_version']}")
     window.show()
+
+    from .ui import onboarding as onboarding_mod
+    onboarding_mod.maybe_show(window)
 
     try:
         return app.exec()

@@ -134,6 +134,7 @@ class CalendarViewBase(QWidget):
         self._tz = times.local_zone()
         self._hits: list = []               # (QRect, event id) filled by paint
         self._slots: list = []              # (QRect, datetime) filled by paint
+        self._deadline_dates: set[str] = set()
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -161,6 +162,11 @@ class CalendarViewBase(QWidget):
 
     def set_timezone(self, tz) -> None:
         self._tz = tz
+        self.update()
+
+    def set_deadline_dates(self, dates) -> None:
+        """ISO dates with a tracking deadline — ui.md §6.3."""
+        self._deadline_dates = set(dates or ())
         self.update()
 
     def selected_id(self) -> int:

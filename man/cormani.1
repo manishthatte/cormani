@@ -182,6 +182,15 @@ interface can show. They are named here and merged in
 .BR "Tools \(-> Address book" ;
 nothing is ever merged automatically, because a merge deletes a card and cannot
 be undone.
+.TP
+.BI \-\-import-vcard " PATH"
+Read contacts from a vCard 3.0 file into the address book and exit. The source
+is opened read-only. Names, organisations, email addresses and telephone numbers
+are imported; other fields are skipped.
+.TP
+.BI \-\-export-vcard " PATH"
+Write the address book to a vCard 3.0 file and exit. Every contact becomes one
+card; email handles and phone numbers are included.
 .PP
 .B \-\-check
 also reports the tracking layer: how many conversations are being pursued, how

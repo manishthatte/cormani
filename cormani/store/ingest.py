@@ -143,10 +143,20 @@ def attachment_path(root: Path, account_id: int, message_id: int,
 
 
 # --------------------------------------------------------------------- FTS
-def _fts_values(row: Mapping) -> tuple[str, str, str, str]:
+def _fts_values(row: Mapping, *, attachment_names: str = "") -> tuple[str, str, str, str]:
     from_repr = " ".join(x for x in (row["from_name"], row["from_addr"]) if x)
     to_repr = " ".join(x for x in (row["to_addrs"], row["cc_addrs"]) if x)
-    return (row["subject"] or "", row["body_text"] or "", from_repr, to_repr)
+    body = row["body_text"] or ""
+    if attachment_names:
+        body = f"{body}\n{attachment_names}".strip()
+    return (row["subject"] or "", body, from_repr, to_repr)
+
+
+def _attachment_names(con: sqlite3.Connection, message_id: int) -> str:
+    rows = con.execute(
+        "SELECT filename FROM attachment WHERE message_id = ? AND filename <> ''",
+        (message_id,)).fetchall()
+    return " ".join(r["filename"] for r in rows)
 
 
 def index_message(con: sqlite3.Connection, message_id: int) -> bool:
@@ -166,7 +176,8 @@ def index_message(con: sqlite3.Connection, message_id: int) -> bool:
 
 
 def _fts_insert(con: sqlite3.Connection, message_id: int, row: Mapping) -> None:
-    subject, body, from_repr, to_repr = _fts_values(row)
+    names = _attachment_names(con, message_id)
+    subject, body, from_repr, to_repr = _fts_values(row, attachment_names=names)
     con.execute(
         "INSERT INTO message_fts (rowid, subject, body, from_repr, to_repr) "
         "VALUES (?, ?, ?, ?, ?)", (message_id, subject, body, from_repr, to_repr))
@@ -213,7 +224,8 @@ def _fts_forget(con: sqlite3.Connection, message_ids: Sequence[int]) -> None:
         f"SELECT id, subject, body_text, from_name, from_addr, to_addrs, cc_addrs "
         f"FROM message WHERE id IN ({marks})", sorted(present)).fetchall()
     for row in rows:
-        subject, body, from_repr, to_repr = _fts_values(row)
+        names = _attachment_names(con, int(row["id"]))
+        subject, body, from_repr, to_repr = _fts_values(row, attachment_names=names)
         con.execute(
             "INSERT INTO message_fts (message_fts, rowid, subject, body, "
             "from_repr, to_repr) VALUES ('delete', ?, ?, ?, ?, ?)",
@@ -316,7 +328,6 @@ def store_message(con: sqlite3.Connection, folder_id: int, uid: int,
     row = con.execute("SELECT * FROM message WHERE folder_id = ? AND uid = ?",
                       (folder_id, uid)).fetchone()
     message_id = int(row["id"])
-    _fts_insert(con, message_id, row)
     # THE THREAD IS DECIDED HERE AND NOT IN THE ENVELOPE, because it is not a
     # property of the message: it depends on what the store already holds. A
     # reply can arrive before the message it answers, and the two are one
@@ -356,6 +367,8 @@ def store_message(con: sqlite3.Connection, folder_id: int, uid: int,
                 (folder_id,)).fetchone()["account_id"]
         written = _write_attachments(con, message_id, int(account_id), env.parts,
                                      attachments_root)
+
+    _fts_insert(con, message_id, row)
 
     if commit:
         con.commit()

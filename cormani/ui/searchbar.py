@@ -38,12 +38,14 @@
 # © Manish Jagdish Thatte
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (QHBoxLayout, QLineEdit, QMenu, QToolButton,
-                               QWidget, QWidgetAction)
+from PySide6.QtWidgets import (QDateEdit, QDialog, QDialogButtonBox,
+                               QFormLayout, QHBoxLayout, QLineEdit, QMenu,
+                               QToolButton, QWidget, QWidgetAction)
 
 from ..store import accounts as accounts_repo
 from ..store import search as search_mod
@@ -51,6 +53,41 @@ from . import icons
 
 # Wide enough for an address or a subject, narrow enough not to be a dialog.
 _POPUP_WIDTH = 260
+
+
+class _DateRangeDialog(QDialog):
+    """A from/to calendar range for the Date chip."""
+
+    def __init__(self, parent=None, *, date_from: str = "",
+                 date_to: str = "") -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Custom date range")
+        form = QFormLayout(self)
+        self.from_date = QDateEdit(self)
+        self.from_date.setCalendarPopup(True)
+        self.to_date = QDateEdit(self)
+        self.to_date.setCalendarPopup(True)
+        today = QDate.currentDate()
+        self.from_date.setDate(QDate.fromString(date_from, Qt.DateFormat.ISODate)
+                               if date_from else today)
+        self.to_date.setDate(QDate.fromString(date_to, Qt.DateFormat.ISODate)
+                             if date_to else today)
+        form.addRow("From:", self.from_date)
+        form.addRow("To:", self.to_date)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel, parent=self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+
+    @property
+    def start(self) -> str:
+        return self.from_date.date().toString(Qt.DateFormat.ISODate)
+
+    @property
+    def end(self) -> str:
+        return self.to_date.date().toString(Qt.DateFormat.ISODate)
 
 
 class _SearchEdit(QLineEdit):
@@ -201,11 +238,21 @@ class SearchBar(QWidget):
         super().__init__(parent)
         self._con = con
         self._loading = False
+        self._collapsed = False
+        self._date_from = ""
+        self._date_to = ""
         self._icon_action = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+
+        self.collapse_button = QToolButton(self)
+        self.collapse_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.collapse_button.setToolTip("Expand search")
+        self.collapse_button.clicked.connect(self._toggle_collapsed)
+        layout.addWidget(self.collapse_button)
 
         self.text = _SearchEdit(self)
         self.text.setPlaceholderText(
@@ -240,6 +287,7 @@ class SearchBar(QWidget):
         self.date_chip = _MenuChip("Date", self)
         self.date_chip.setToolTip("Only messages from this period")
         self.date_chip.set_options(search_mod.WITHIN)
+        self.date_chip.changed.connect(self._date_chip_changed)
 
         self.account_chip = _MenuChip("Account", self)
         self.account_chip.setToolTip("Only this account")
@@ -256,7 +304,11 @@ class SearchBar(QWidget):
                       self.date_chip, self.account_chip, self.discarded_chip)
         for chip in self.chips:
             layout.addWidget(chip)
-            if isinstance(chip, (_TextChip, _MenuChip)):
+            if isinstance(chip, _TextChip):
+                chip.changed.connect(self._emit)
+            elif chip is self.date_chip:
+                pass
+            elif isinstance(chip, _MenuChip):
                 chip.changed.connect(self._emit)
             else:
                 chip.toggled.connect(self._emit)
@@ -269,6 +321,23 @@ class SearchBar(QWidget):
         layout.addWidget(self.clear_button)
 
         self.reload_accounts()
+        self._apply_collapsed()
+
+    def _toggle_collapsed(self) -> None:
+        self._collapsed = not self._collapsed
+        self._apply_collapsed()
+        if not self._collapsed:
+            self.focus_text()
+
+    def _apply_collapsed(self) -> None:
+        show = not self._collapsed
+        self.text.setVisible(show)
+        for chip in self.chips:
+            chip.setVisible(show)
+        self.clear_button.setVisible(show and self.query.active)
+        tip = ("Expand search" if self._collapsed
+               else "Collapse search to an icon")
+        self.collapse_button.setToolTip(tip)
 
     # ---------------------------------------------------------------- the query
     @property
@@ -282,6 +351,8 @@ class SearchBar(QWidget):
             subject=self.subject_chip.value(),
             attachment=self.attachment_chip.isChecked(),
             within=self.date_chip.value() or "",
+            date_from=self._date_from,
+            date_to=self._date_to,
             account_id=self.account_chip.value(),
             discarded=self.discarded_chip.isChecked())
 
@@ -295,7 +366,13 @@ class SearchBar(QWidget):
             self.sender_chip.set_value(query.sender)
             self.subject_chip.set_value(query.subject)
             self.attachment_chip.setChecked(query.attachment)
-            self.date_chip.set_value(query.within or "")
+            self._date_from = query.date_from or ""
+            self._date_to = query.date_to or ""
+            if self._date_from or self._date_to:
+                self.date_chip.set_value("custom")
+            else:
+                self.date_chip.set_value(query.within or "")
+            self._relabel_date_chip()
             self.account_chip.set_value(query.account_id)
             self.discarded_chip.setChecked(query.discarded)
             self.clear_button.setEnabled(query.active)
@@ -323,6 +400,43 @@ class SearchBar(QWidget):
         if self._loading or value.strip():
             return
         self._emit()
+
+    def _date_chip_changed(self) -> None:
+        if self._loading:
+            return
+        choice = self.date_chip.value()
+        if choice == "custom":
+            dialog = _DateRangeDialog(self, date_from=self._date_from,
+                                      date_to=self._date_to)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                if self._date_from or self._date_to:
+                    self.date_chip.set_value("custom")
+                else:
+                    self.date_chip.set_value("")
+                return
+            self._date_from = dialog.start
+            self._date_to = dialog.end
+            self.date_chip.set_value("custom")
+        else:
+            self._date_from = ""
+            self._date_to = ""
+        self._relabel_date_chip()
+        self._emit()
+
+    def _relabel_date_chip(self) -> None:
+        if self._date_from or self._date_to:
+            if self._date_from and self._date_to:
+                label = f"{self._date_from} – {self._date_to}"
+            elif self._date_from:
+                label = f"From {self._date_from}"
+            else:
+                label = f"Until {self._date_to}"
+            self.date_chip.setText(label)
+            font = QFont(self.date_chip.font())
+            font.setBold(True)
+            self.date_chip.setFont(font)
+        else:
+            self.date_chip.relabel()
 
     def _emit(self) -> None:
         if self._loading:
@@ -352,6 +466,7 @@ class SearchBar(QWidget):
                 icon, QLineEdit.ActionPosition.LeadingPosition)
         else:
             self._icon_action.setIcon(icon)
+        self.collapse_button.setIcon(icon)
         self.attachment_chip.setIcon(
             icons.icon("paperclip", theme.text_strong, 14))
         self.discarded_chip.setIcon(icons.icon("trash", theme.text_strong, 14))

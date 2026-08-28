@@ -73,6 +73,12 @@ class Settings:
     # entirely, with `sites = []` meaning defaults and `sites = ["none"]`
     # meaning none.
     sites: list[str] = field(default_factory=list)
+    # Desktop notifications are suppressed during these local hours when
+    # enabled. Start and end are 0–23; when start > end the quiet period
+    # crosses midnight (e.g. 22–7).
+    notify_quiet_enabled: bool = False
+    notify_quiet_start: int = 22
+    notify_quiet_end: int = 7
 
     source: str = ""                        # which file this came from, if any
 
@@ -138,6 +144,44 @@ def unknown_keys(path: Path) -> list[str]:
     except tomllib.TOMLDecodeError:
         return []
     return sorted(k for k in raw if k not in Settings.__dataclass_fields__ or k == "source")
+
+
+def _toml_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _toml_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        return _toml_string(value)
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        items = ", ".join(_toml_value(item) for item in value)
+        return f"[{items}]"
+    raise TypeError(f"cannot write {type(value)!r} to TOML")
+
+
+def save(settings: Settings, path: Path | None = None, *,
+         paths: Paths | None = None) -> Path:
+    """Write settings to the configuration file."""
+    paths = paths or Paths()
+    path = path or paths.config_file
+    lines = [
+        "# corMani configuration. © Manish Jagdish Thatte",
+        "",
+    ]
+    for key in Settings.__dataclass_fields__:
+        if key == "source":
+            continue
+        lines.append(f"{key} = {_toml_value(getattr(settings, key))}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    settings.source = str(path)
+    return path
 
 
 EXAMPLE = """\

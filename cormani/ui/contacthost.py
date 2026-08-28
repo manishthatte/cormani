@@ -99,6 +99,14 @@ class ContactHost:
         if contact_id:
             self.contacts.show_contact(int(contact_id))
 
+    def open_by_address(self, address: str) -> str | None:
+        """Open a contact from an address. Returns a status message if absent."""
+        contact = contacts_repo.contact_for_address(self.pane._con, address)
+        if contact is None:
+            return f"{address} is not in the address book."
+        self.open(contact.id)
+        return None
+
     def title(self) -> str:
         return self.contacts.title()
 
@@ -118,6 +126,12 @@ class ContactHost:
             return self._new()
         if name == "suggest":
             return self._suggest()
+        if name == "import-vcard":
+            return self._import_vcard()
+        if name == "export-vcard":
+            return self._export_vcard()
+        if name == "merge-suggested":
+            return self._merge_suggested()
 
         contact_id = contact_id or self.contacts.contact_id()
         if not contact_id:
@@ -364,6 +378,68 @@ class ContactHost:
             self.contacts.show_contact(last)
         self.pane.status_message.emit(
             f"Added {made} contact{'' if made == 1 else 's'} from your mail.")
+        return True
+
+    def _import_vcard(self) -> bool:
+        from pathlib import Path
+
+        from PySide6.QtWidgets import QFileDialog
+
+        from ..importer import vcard as vcard_mod
+
+        path, _ = QFileDialog.getOpenFileName(
+            self.pane, "Import vCard", "",
+            "vCard files (*.vcf *.vcard);;All files (*)")
+        if not path:
+            return False
+        report = vcard_mod.import_file(self.pane._con, Path(path))
+        self.refresh()
+        self.pane.status_message.emit(
+            f"Imported {report.imported} contact"
+            f"{'' if report.imported == 1 else 's'} from {Path(path).name}.")
+        return bool(report.imported)
+
+    def _export_vcard(self) -> bool:
+        from pathlib import Path
+
+        from PySide6.QtWidgets import QFileDialog
+
+        from ..importer import vcard as vcard_mod
+
+        path, _ = QFileDialog.getSaveFileName(
+            self.pane, "Export vCard", "contacts.vcf",
+            "vCard files (*.vcf);;All files (*)")
+        if not path:
+            return False
+        dest = Path(path)
+        if dest.suffix.lower() not in (".vcf", ".vcard"):
+            dest = dest.with_suffix(".vcf")
+        count = vcard_mod.export_file(self.pane._con, dest)
+        self.pane.status_message.emit(
+            f"Exported {count} contact{'' if count == 1 else 's'} to "
+            f"{dest.name}.")
+        return bool(count)
+
+    def _merge_suggested(self) -> bool:
+        pairs = book_repo.duplicates(self.pane._con)
+        if not pairs:
+            self.pane.status_message.emit("No possible duplicates right now.")
+            return False
+        pair = pairs[0]
+        keep = contacts_repo.get_contact(self.pane._con, pair.keep_id)
+        others = [contacts_repo.get_contact(self.pane._con, pair.drop_id)]
+        if keep is None or others[0] is None:
+            return False
+        dialog = self._dialog("merge", keep=keep, others=others,
+                              suggested_id=pair.drop_id)
+        if dialog is None or not self._run(dialog):
+            return False
+        target = int(dialog.values().get("keep_id") or keep.id)
+        drop = int(dialog.values().get("drop_id") or pair.drop_id)
+        contacts_repo.merge_contacts(self.pane._con, target, drop)
+        self.refresh()
+        self.contacts.show_contact(target)
+        self.pane.status_message.emit("Merged the two cards.")
         return True
 
     # -------------------------------------------------------- from elsewhere

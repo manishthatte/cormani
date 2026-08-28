@@ -62,7 +62,7 @@ ACCOUNT_COLOURS: tuple[str, ...] = (
     "#9c4b5c",  # maroon
 )
 
-PROVIDERS = ("google", "microsoft", "imap")
+PROVIDERS = ("google", "microsoft", "fastmail", "yahoo", "icloud", "imap")
 
 
 @dataclass(frozen=True)
@@ -118,6 +118,7 @@ class Account:
     colour: str
     hidden: bool
     enabled: bool
+    last_error: str = ""
 
     @property
     def label(self) -> str:
@@ -136,7 +137,8 @@ def _account(row: sqlite3.Row) -> Account:
         id=row["id"], address=row["address"], display_name=row["display_name"],
         provider=row["provider"], group_id=row["group_id"],
         sort_order=row["sort_order"], colour=row["colour"],
-        hidden=bool(row["hidden"]), enabled=bool(row["enabled"]))
+        hidden=bool(row["hidden"]), enabled=bool(row["enabled"]),
+        last_error=row["last_error"] if "last_error" in row.keys() else "")
 
 
 # ---------------------------------------------------------------- colours

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cormani.config.settings import EXAMPLE, Settings, load, unknown_keys
+from cormani.config.settings import EXAMPLE, Settings, load, save, unknown_keys
 
 
 class TestSettings(unittest.TestCase):
@@ -64,6 +64,18 @@ class TestSettings(unittest.TestCase):
     def test_remote_content_is_blocked_by_default(self):
         # A tracking pixel is a disclosure. CONVENTIONS.txt §7.
         self.assertTrue(Settings().block_remote_content)
+
+    def test_save_round_trips_known_fields(self):
+        p = self._write('log_level = "info"\n')
+        original = load(path=p)
+        original.log_level = "warning"
+        original.sync_interval_minutes = 10
+        original.chromium_flags = ["--disable-gpu"]
+        save(original, p)
+        again = load(path=p)
+        self.assertEqual(again.log_level, "warning")
+        self.assertEqual(again.sync_interval_minutes, 10)
+        self.assertEqual(again.chromium_flags, ["--disable-gpu"])
 
 
 if __name__ == "__main__":

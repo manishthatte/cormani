@@ -91,9 +91,11 @@ class EventDetail(QWidget):
         row = QHBoxLayout(self.actions)
         row.setContentsMargins(12, 0, 12, 12)
         self.edit_button = QPushButton("Edit", self.actions)
+        self.move_button = QPushButton("Move to…", self.actions)
         self.delete_button = QPushButton("Delete", self.actions)
         self.open_button = QPushButton("Open on the web", self.actions)
         for button, name in ((self.edit_button, "edit"),
+                             (self.move_button, "move"),
                              (self.delete_button, "delete"),
                              (self.open_button, "open")):
             button.clicked.connect(lambda _c=False, n=name: self.command.emit(n))
@@ -108,6 +110,9 @@ class EventDetail(QWidget):
         overriding it with a getter breaks every widget in the tree — Qt calls
         it with an event object and gets a TypeError, silently, in a slot."""
         return self._event
+
+    def current_calendar(self):
+        return self._calendar
 
     def show_event(self, event, calendar, *, tz=None) -> None:
         self._event, self._calendar = event, calendar
@@ -142,8 +147,18 @@ class EventDetail(QWidget):
             button.setEnabled(event.my_response != value)
         self.actions.setVisible(True)
         writable = bool(calendar and calendar.writable)
-        self.edit_button.setEnabled(writable)
+        if event.is_series_master:
+            self.edit_button.setEnabled(False)
+            self.edit_button.setToolTip(
+                "This is the recurring series master. corMani stores individual "
+                "occurrences only — open one occurrence to edit it.")
+        else:
+            self.edit_button.setEnabled(writable)
+            self.edit_button.setToolTip("")
         self.delete_button.setEnabled(writable)
+        self.move_button.setEnabled(writable and not event.is_series_master)
+        self.move_button.setToolTip(
+            "" if writable else "This calendar cannot be written to")
         self.open_button.setVisible(bool(event.web_link))
 
     def _guest_lines(self, event) -> str:
@@ -171,9 +186,12 @@ class EventDetail(QWidget):
         if event.pending:
             notes.append("Your change has not reached the provider yet; it "
                          "will go on the next sync.")
-        if event.recurring:
+        if event.recurring and not event.is_series_master:
             notes.append("This is one occurrence of a repeating event. "
                          "corMani changes the occurrence, not the series.")
+        elif event.is_series_master:
+            notes.append("This is the recurring series master. corMani cannot "
+                         "edit the whole series — choose one occurrence instead.")
         if self._calendar is not None and not self._calendar.writable:
             notes.append(f"{self._calendar.label} is shared read-only, so this "
                          f"event cannot be changed here.")

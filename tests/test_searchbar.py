@@ -315,7 +315,7 @@ class TestTheBarReachesTheStore(unittest.TestCase):
 
     def test_the_tab_is_named_for_the_search_rather_than_the_folder_under_it(self):
         self.search_for("wavelength")
-        self.assertEqual(self.window.tabs.tabText(0), "Search: wavelength")
+        self.assertEqual(self.window.tabs.tabText(0), "Mail · Search: wavelength")
         self.bar.clear()
         self.assertNotIn("Search", self.window.tabs.tabText(0))
 

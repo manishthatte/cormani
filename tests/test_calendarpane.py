@@ -224,7 +224,7 @@ class InTheWindow(unittest.TestCase):
         self.assertTrue(pane.rail.select_key(f"calendar:{self.calendar}"))
         self.assertTrue(pane.showing_calendar())
         self.assertEqual(pane.calendar.calendar_ids(), [self.calendar])
-        self.assertEqual(pane.title_for_scope(), "Mine")
+        self.assertEqual(pane.title_for_scope(), "Calendar · Mine")
 
     def test_choosing_a_folder_puts_the_mail_back(self):
         pane = self.pane()

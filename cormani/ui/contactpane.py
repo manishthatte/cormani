@@ -188,6 +188,14 @@ class ContactPane(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(4)
 
+        self.duplicates_banner = QLabel("", self)
+        self.duplicates_banner.setWordWrap(True)
+        self.duplicates_banner.setVisible(False)
+        self.duplicates_banner.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.duplicates_banner.mousePressEvent = lambda _e: self.action.emit(
+            "merge-suggested")
+        outer.addWidget(self.duplicates_banner)
+
         self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
 
         left = QWidget(self.splitter)
@@ -228,6 +236,14 @@ class ContactPane(QWidget):
             "most mail first")
         self.import_button.clicked.connect(lambda *_: self.action.emit("suggest"))
         row.addWidget(self.import_button)
+        self.vcard_in_button = QPushButton("Import vCard…", buttons)
+        self.vcard_in_button.clicked.connect(
+            lambda *_: self.action.emit("import-vcard"))
+        row.addWidget(self.vcard_in_button)
+        self.vcard_out_button = QPushButton("Export vCard…", buttons)
+        self.vcard_out_button.clicked.connect(
+            lambda *_: self.action.emit("export-vcard"))
+        row.addWidget(self.vcard_out_button)
         row.addStretch(1)
         column.addWidget(buttons)
 
@@ -251,6 +267,17 @@ class ContactPane(QWidget):
         self.list.reload()
         self.card.reload()
         self.footer.setText(self._footer())
+        self._update_duplicates_banner()
+
+    def _update_duplicates_banner(self) -> None:
+        count = book_repo.summary(self._con)["duplicates"]
+        if count:
+            word = "duplicate" if count == 1 else "duplicates"
+            self.duplicates_banner.setText(
+                f"{count} possible {word} — click here to review and merge.")
+            self.duplicates_banner.setVisible(True)
+        else:
+            self.duplicates_banner.setVisible(False)
 
     def _footer(self) -> str:
         """The counts, and the two things that are WRONG rather than so.
@@ -303,11 +330,13 @@ class ContactPane(QWidget):
         if theme is not None:
             self.footer.setStyleSheet(
                 f"color: {theme.text_muted}; padding: 4px 10px;")
+            if self.duplicates_banner.isVisible():
+                self.duplicates_banner.setStyleSheet(
+                    f"color: {theme.deadline}; background: {theme.surface_raised}; "
+                    f"padding: 6px 10px; border: 1px dashed {theme.border};")
 
     def title(self) -> str:
-        """What the TAB says. A number and not a badge: unlike tracking, there
-        is nothing here that becomes urgent by being ignored, so the count is
-        context rather than a warning."""
+        """What the TAB says after the Contacts · prefix."""
         held = contacts_repo.counts(self._con)["contacts"]
         return f"Address book ({held})" if held else "Address book"
 

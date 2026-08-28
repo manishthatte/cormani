@@ -50,7 +50,7 @@ class TestTheRegistry(unittest.TestCase):
         # corMani already holds Gmail and Outlook mail over IMAP. A panel for
         # them is for what only the web can do, and is not the default.
         self.assertEqual(sites_mod.default_keys(),
-                         ["whatsapp", "linkedin", "x", "facebook"])
+                         ["whatsapp", "linkedin", "x", "facebook", "telegram"])
 
     def test_a_rail_key_goes_there_and_back(self):
         for site in sites_mod.SITES:
@@ -477,20 +477,28 @@ class TestSigningOut(unittest.TestCase):
         window.attach_sites(list(keys))
         return window
 
-    def test_the_menu_offers_exactly_the_sites_that_are_on(self):
+    def test_the_menu_lists_every_site_and_ticks_the_ones_that_are_on(self):
         window = self._window(("whatsapp", "x"))
-        labels = [a.text() for a in window.sites_menu.actions() if a.text()]
+        labels = [a.text() for a in window.sites_menu.actions()
+                  if a.isCheckable()]
         self.assertIn("WhatsApp", labels)
         self.assertIn("X", labels)
-        self.assertNotIn("LinkedIn", labels)
+        self.assertIn("LinkedIn", labels)
+        wa = next(a for a in window.sites_menu.actions()
+                  if a.text() == "WhatsApp")
+        self.assertTrue(wa.isChecked())
+        li = next(a for a in window.sites_menu.actions()
+                  if a.text() == "LinkedIn")
+        self.assertFalse(li.isChecked())
 
-    def test_with_no_panels_the_menu_is_not_shown_at_all(self):
-        """The panels can be off entirely — finding 2 makes that a
-        requirement — and a menu offering WhatsApp on a build with them off
-        would be a menu that lies."""
+    def test_with_no_panels_every_site_is_unchecked(self):
+        """The panels can be off entirely — finding 2 — but the menu still
+        lists them so a person can turn one on."""
         window = self._window(())
-        self.assertFalse(window.sites_menu.menuAction().isVisible())
-        self.assertEqual(window.sites_menu.actions(), [])
+        self.assertTrue(window.sites_menu.menuAction().isVisible())
+        checked = [a.text() for a in window.sites_menu.actions()
+                   if a.isCheckable() and a.isChecked()]
+        self.assertEqual(checked, [])
 
     def test_signing_out_asks_first_and_a_refusal_changes_nothing(self):
         """It cannot be undone and is not cheap to reverse: signing back into

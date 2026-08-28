@@ -32,8 +32,11 @@ from .. import APP_NAME
 from ..store import views as views_repo
 from . import density as density_mod
 from . import accounthost
+from . import commands as commands_mod
 from . import filterhost
 from . import help as help_mod
+from . import healthdialog as healthdialog_mod
+from . import preferences as preferences_mod
 from . import shortcuts as shortcuts_mod
 from . import theme as theme_mod
 from . import viewhost
@@ -119,6 +122,11 @@ def build(window) -> None:
     # wondering whether to.
     m_edit.aboutToShow.connect(window._label_undo)
     m_edit.addSeparator()
+    act_prefs = QAction("&Preferences…", window)
+    act_prefs.setStatusTip("Appearance, sync, panels and privacy settings")
+    act_prefs.triggered.connect(lambda: preferences_mod.show(window))
+    m_edit.addAction(act_prefs)
+    m_edit.addSeparator()
     window.act_search = window_action(window, "search", window.search.focus_text)
     m_edit.addAction(window.act_search)
     m_edit.addAction(window_action(window, "filter", window.mail.quick_filter.focus_text))
@@ -187,6 +195,9 @@ def build(window) -> None:
             # and an entry that silently means "by date" is a lie.
             action.setEnabled(False)
             action.setStatusTip("Best match first — while a search is running")
+            action.setToolTip(
+                "Available only while a search is active — sorts by how well "
+                "each message matches the query")
         action.triggered.connect(lambda _=False, k=key: window._sort_by(k))
         window._sort_group.addAction(action)
         sort_menu.addAction(action)
@@ -197,6 +208,14 @@ def build(window) -> None:
     window.act_descending.setChecked(True)
     window.act_descending.toggled.connect(window._sort_direction)
     sort_menu.addAction(window.act_descending)
+
+    m_view.addSeparator()
+    window.act_back_to_mail = QAction("&Back to mail", window)
+    window.act_back_to_mail.setShortcut("Ctrl+Shift+M")
+    window.act_back_to_mail.setStatusTip(
+        "Return to the message list from calendar, tracking, contacts or a site")
+    window.act_back_to_mail.triggered.connect(window.mail.show_mail)
+    m_view.addAction(window.act_back_to_mail)
 
     m_view.addSeparator()
     window.act_threaded = QAction("&Conversations", window)
@@ -228,6 +247,17 @@ def build(window) -> None:
             m_message.addSeparator()
         else:
             m_message.addAction(list_action(window, entry))
+    act_print = QAction("&Print…", window)
+    act_print.setShortcut(QKeySequence.StandardKey.Print)
+    act_print.setStatusTip(commands_mod.command_tooltip("print"))
+    act_print.setEnabled(commands_mod.command_ready("print"))
+    act_print.triggered.connect(lambda: window.mail.run_action("print", _selected_ids(window)))
+    m_message.addAction(act_print)
+    act_pdf = QAction("Export as &PDF…", window)
+    act_pdf.setStatusTip("Save the message being read as a PDF file")
+    act_pdf.triggered.connect(
+        lambda: window.mail.run_action("export_pdf", _selected_ids(window)))
+    m_message.addAction(act_pdf)
     m_message.addSeparator()
     # Rebuilt each time it opens, because a tag can be renamed, recoloured
     # or given a key while the window is open — and a menu built once is a
@@ -308,28 +338,41 @@ def build(window) -> None:
     # menu offering WhatsApp on a build with the panels turned off would be a
     # menu that lies.
     window.sites_menu = bar.addMenu("&Panels")
-    window.sites_menu.menuAction().setVisible(False)
 
     m_go = bar.addMenu("&Go")
     for entry in _GO_MENU:
         m_go.addAction(list_action(window, entry))
 
     m_help = bar.addMenu("&Help")
+    if window._demo:
+        act_tour = QAction("Take &tour", window)
+        act_tour.setStatusTip(
+            "Open the tracking tab and see how corMani follows conversations")
+        act_tour.triggered.connect(window._demo_tour)
+        m_help.addAction(act_tour)
+        m_help.addSeparator()
     act_keys = QAction("&Keyboard shortcuts…", window)
     act_keys.triggered.connect(
         lambda: help_mod.ShortcutsDialog(window).exec())
     m_help.addAction(act_keys)
+    act_health = QAction("&Installation health…", window)
+    act_health.setStatusTip(
+        "Report what is installed, configured and present — like cormani --check")
+    act_health.triggered.connect(lambda: healthdialog_mod.show(window))
+    m_help.addAction(act_health)
     window.act_about = QAction(f"&About {APP_NAME}", window)
     window.act_about.triggered.connect(window._about)
     m_help.addAction(window.act_about)
 
 def window_action(window, shortcut_id: str, slot=None) -> QAction:
     shortcut = shortcuts_mod.by_id(shortcut_id)
+    ready = _action_ready(shortcut_id)
     action = QAction(shortcut.label, window)
     action.setShortcut(QKeySequence(shortcut.key))
-    action.setStatusTip(shortcut.description)
-    action.setEnabled(shortcut.ready)
-    if slot is not None and shortcut.ready:
+    tip = commands_mod.command_tooltip(shortcut_id) or shortcut.description
+    action.setStatusTip(tip)
+    action.setEnabled(ready)
+    if slot is not None and ready:
         action.triggered.connect(lambda _=False: slot())
     window.addAction(action)
     return action
@@ -338,12 +381,23 @@ def list_action(window, shortcut_id: str) -> QAction:
     """A menu entry that shows a key but does not install it. See the note
     at the top of this file."""
     shortcut = shortcuts_mod.by_id(shortcut_id)
+    ready = _action_ready(shortcut_id)
     action = QAction(f"{shortcut.label}\t{shortcut.key}", window)
-    action.setStatusTip(shortcut.description)
-    action.setEnabled(shortcut.ready)
+    tip = commands_mod.command_tooltip(shortcut_id) or shortcut.description
+    action.setStatusTip(tip)
+    action.setEnabled(ready)
     action.triggered.connect(
         lambda _=False, s=shortcut_id: run_list_action(window, s))
     return action
+
+def _action_ready(shortcut_id: str) -> bool:
+    if commands_mod.known(shortcut_id):
+        return commands_mod.command_ready(shortcut_id)
+    return shortcuts_mod.by_id(shortcut_id).ready
+
+def _selected_ids(window) -> list[int]:
+    row = window.mail.current_row()
+    return [row.id] if row is not None else []
 
 def run_list_action(window, shortcut_id: str) -> None:
     window.mail.run_shortcut(shortcut_id)

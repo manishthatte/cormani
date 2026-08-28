@@ -276,8 +276,34 @@ def delete_event(con: sqlite3.Connection, event_id: int, *,
 
 
 def move_to_calendar(con: sqlite3.Connection, event_id: int,
-                     calendar_id: int) -> None:
-    """Not implemented, and not by omission. See the module header."""
-    raise NotSupported(
-        "moving an event between calendars is a delete and a create on both "
-        "providers; corMani does not offer it as one action")
+                     calendar_id: int, *, commit: bool = True) -> int:
+    """Move an event by deleting it on the source calendar and creating it on
+    the target. Both providers implement a move as delete+create; this exposes
+    that as one user-facing action."""
+    event = events_repo.get_event(con, event_id)
+    if event is None:
+        raise NotWritable("that event is no longer in the store")
+    target = int(calendar_id)
+    if event.calendar_id == target:
+        return event_id
+    if event.is_series_master:
+        raise NotSupported(
+            "moving a recurring series master is not supported")
+    _require_writable(con, event.calendar_id)
+    _require_writable(con, target)
+    guests = list(event.attendees)
+    fields = {
+        "summary": event.summary,
+        "description": event.description,
+        "location": event.location,
+        "starts_at": event.starts_at,
+        "ends_at": event.ends_at,
+        "all_day": event.all_day,
+        "busy": event.busy,
+        "reminder": event.reminder,
+    }
+    delete_event(con, event_id, commit=False)
+    new_id = create_event(con, target, attendees=guests, commit=False, **fields)
+    if commit:
+        con.commit()
+    return new_id

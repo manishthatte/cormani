@@ -1,0 +1,22 @@
+name: windows-smoke
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PySide6
+        run: pip install PySide6
+      - name: Platform paths smoke
+        run: python -c "from cormani.platform import paths, runtime; p=paths.Paths(); print(p.data_dir); runtime.ensure_dirs(p)"
+      - name: Headless check
+        run: python -m cormani --check
+      - name: Unit tests (no display)
+        run: python -m unittest discover -s tests -t . -q

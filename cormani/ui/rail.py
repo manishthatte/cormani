@@ -110,6 +110,11 @@ class RailDelegate(QStyledItemDelegate):
             icons.paint(painter, "hidden", box, muted)
             left += d.icon + 4
 
+        if index.data(rail_model.ErrorRole):
+            box = QRectF(left, rect.center().y() - d.icon / 2.0, d.icon, d.icon)
+            icons.paint(painter, "dot", box, QColor(t.error))
+            left += d.icon + 4
+
         count = index.data(rail_model.CountRole) or 0
         if count:
             text = str(count) if count < 1000 else "999+"

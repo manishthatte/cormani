@@ -66,6 +66,7 @@ HiddenRole = _ROLE + 8
 KeyRole = _ROLE + 9          # a stable string identity, for restoring selection
 CalendarIdRole = _ROLE + 10  # 0 on the "every calendar" row, which is not one
 ViewIdRole = _ROLE + 11      # the saved_view row a virtual folder stands for
+ErrorRole = _ROLE + 12       # account sync error — draw a warning icon
 
 
 # The sites are `panels/sites.py`'s registry now, and this module does not keep
@@ -117,7 +118,7 @@ def view_id_from_key(key: str):
 class Node:
     __slots__ = ("kind", "label", "key", "colour", "count", "scope", "detail",
                  "account_id", "group_id", "folder_id", "calendar_id",
-                 "view_id", "hidden", "ready", "children", "parent", "row")
+                 "view_id", "hidden", "ready", "error", "children", "parent", "row")
 
     def __init__(self, kind: str, label: str, key: str, **kw: Any) -> None:
         self.kind = kind
@@ -134,6 +135,7 @@ class Node:
         self.view_id: int | None = kw.get("view_id")
         self.hidden: bool = kw.get("hidden", False)
         self.ready: bool = kw.get("ready", True)
+        self.error: bool = kw.get("error", False)
         self.children: list["Node"] = []
         self.parent: "Node | None" = None
         self.row = 0
@@ -365,7 +367,10 @@ class RailModel(QAbstractItemModel):
             ACCOUNT, account.label, f"account:{account.id}",
             colour=account.colour, count=unread.get(account.id, 0),
             account_id=account.id, group_id=account.group_id,
-            hidden=account.hidden, detail=account.address,
+            hidden=account.hidden,
+            error=bool(account.last_error),
+            detail=account.address + (
+                f"\nSync error: {account.last_error}" if account.last_error else ""),
             scope=views_repo.Scope(kind="account",
                                       role=folders_repo.ROLE_INBOX,
                                       account_id=account.id)))
@@ -434,6 +439,8 @@ class RailModel(QAbstractItemModel):
             return node.view_id
         if role == HiddenRole:
             return node.hidden
+        if role == ErrorRole:
+            return node.error
         if role == KeyRole:
             return node.key
         return None

@@ -28,6 +28,7 @@ from dataclasses import dataclass, replace
 
 from . import folders as folders_repo
 from . import search as search_mod
+from . import snooze as snooze_mod
 from .accounts import list_accounts, list_identity_addresses
 
 # The pseudo-role. Not a folder anywhere, and not written to the folder table.
@@ -281,4 +282,7 @@ def clause(con: sqlite3.Connection, scope: Scope, filters: Filters,
     if filter_sql:
         sql += f" AND {filter_sql}"
         params = params + filter_params
+    snooze_sql, snooze_params = snooze_mod.active_snooze_clause()
+    sql += f" AND {snooze_sql}"
+    params = params + snooze_params
     return sql, params

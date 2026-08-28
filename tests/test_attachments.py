@@ -364,7 +364,8 @@ class TestStrip(AttachmentCase):
         self.assertEqual(self.strip.caption.text(), "Attachment:")
         self.assertFalse(self.strip.save_all_button.isVisible())
         self.show([self.a_pdf(), self.a_pdf("second.pdf", sub="1/2")])
-        self.assertEqual(self.strip.caption.text(), "2 attachments:")
+        self.assertIn("2 attachments ·", self.strip.caption.text())
+        self.assertIn("total:", self.strip.caption.text())
         self.assertTrue(self.strip.save_all_button.isVisibleTo(self.strip))
 
     def test_showing_another_message_forgets_the_last_one(self):

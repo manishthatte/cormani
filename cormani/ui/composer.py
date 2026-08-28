@@ -134,6 +134,9 @@ class Composer(QDialog):
         self.save_button = QPushButton("Save &draft", self)
         self.save_button.clicked.connect(self.save)
         row.addWidget(self.save_button)
+        self.preview_button = QPushButton("&Preview", self)
+        self.preview_button.clicked.connect(self.preview)
+        row.addWidget(self.preview_button)
         row.addStretch(1)
         self.note = QLabel("", self)
         self.note.setWordWrap(True)
@@ -143,7 +146,12 @@ class Composer(QDialog):
         self._install_shortcuts()
         self._select_identity(draft.from_address)
         self._redraw_chips()
-        self.to.setFocus() if not draft.to else self.body.setFocus()
+
+    def show(self) -> None:
+        super().show()
+        self.raise_()
+        self.activateWindow()
+        self.to.setFocus()
 
     # ------------------------------------------------------------- shortcuts
     def _install_shortcuts(self) -> None:
@@ -238,6 +246,18 @@ class Composer(QDialog):
         self.saved.emit(row_id)
         return row_id
 
+    def preview(self) -> None:
+        draft = self.draft()
+        identity = accounts_repo.identity_for(
+            self._con, draft.account_id, self.identity.currentData() or "")
+        body = with_signature(draft.body,
+                              identity.signature if identity else "")
+        lines = [f"To: {draft.to}"]
+        if draft.cc.strip():
+            lines.append(f"Cc: {draft.cc}")
+        lines.extend([f"Subject: {draft.subject}", "", body])
+        QMessageBox.information(self, "Outgoing message preview", "\n".join(lines))
+
     # --------------------------------------------------------------- sending
     def send(self) -> bool:
         """Queue it. The outbox does the rest — see the note at the top."""
@@ -305,14 +325,16 @@ def for_reply(con, row, body, *, all_recipients=False, parent=None, **kw) -> Com
     identities = accounts_repo.list_identities(con, row.account_id)
     mine = accounts_repo.list_identity_addresses(con)
     draft = quote_mod.reply(row, body, identities, all_recipients=all_recipients,
-                            mine=mine, signature=_signature(identities, row))
+                            mine=mine, signature=quote_mod.signature_for_reply(
+                                identities, row))
     return Composer(con, draft, parent, **kw)
 
 
 def for_forward(con, row, body, *, attachments=(), parent=None, **kw) -> Composer:
     identities = accounts_repo.list_identities(con, row.account_id)
     draft = quote_mod.forward(row, body, identities, attachments=attachments,
-                              signature=_signature(identities, row))
+                              signature=quote_mod.signature_for_reply(
+                                  identities, row))
     return Composer(con, draft, parent, **kw)
 
 
@@ -323,9 +345,3 @@ def for_new(con, account_id: int, parent=None, *, to: str = "",
                             signature=identity.signature if identity else "",
                             to=to)
     return Composer(con, draft, parent, **kw)
-
-
-def _signature(identities, row) -> str:
-    """The signature of the identity a reply will come from."""
-    identity = quote_mod._identity_for_reply(list(identities), row)
-    return identity.signature if identity else ""

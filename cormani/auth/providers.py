@@ -103,7 +103,32 @@ IMAP = Provider(
     allows_password=True,
 )
 
-PROVIDERS: dict = {p.name: p for p in (GOOGLE, MICROSOFT, IMAP)}
+FASTMAIL = Provider(
+    name="fastmail",
+    label="Fastmail",
+    imap_host="imap.fastmail.com",
+    smtp_host="smtp.fastmail.com",
+    allows_password=True,
+)
+
+YAHOO = Provider(
+    name="yahoo",
+    label="Yahoo Mail",
+    imap_host="imap.mail.yahoo.com",
+    smtp_host="smtp.mail.yahoo.com",
+    allows_password=True,
+)
+
+ICLOUD = Provider(
+    name="icloud",
+    label="iCloud Mail",
+    imap_host="imap.mail.me.com",
+    smtp_host="smtp.mail.me.com",
+    allows_password=True,
+)
+
+PROVIDERS: dict = {p.name: p for p in (
+    GOOGLE, MICROSOFT, FASTMAIL, YAHOO, ICLOUD, IMAP)}
 
 
 def get(name: str) -> Provider:

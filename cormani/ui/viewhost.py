@@ -270,7 +270,7 @@ def build_menu(window, menu) -> None:
     menu.clear()
     views = savedviews_repo.list_views(window._store)
     if not views:
-        empty = QAction("none saved yet", window)
+        empty = QAction("(none saved)", window)
         empty.setEnabled(False)
         menu.addAction(empty)
         return

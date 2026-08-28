@@ -85,6 +85,7 @@ class SitePanel(QWidget):
         self.site = site
         self._user_agent = user_agent
         self._loaded = False
+        self._unread_failed = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -109,7 +110,6 @@ class SitePanel(QWidget):
         self.reload_button.clicked.connect(self.reload)
         row.addWidget(self.reload_button)
         self.browser_button = QPushButton("Open in browser", bar)
-        self.browser_button.setFlat(True)
         self.browser_button.clicked.connect(
             lambda: self.open_externally.emit(self.site.url))
         row.addWidget(self.browser_button)
@@ -203,6 +203,11 @@ class SitePanel(QWidget):
         return f"Chromium {version}" if version else "older than a browser's"
 
     def _counted(self, key: str, number) -> None:
+        if number is None and self._loaded:
+            self._unread_failed = True
+            self.status.setText(
+                f"{self.site.name} is loaded, but the unread badge is "
+                f"unavailable — the site may have changed its page layout.")
         self.unread_changed.emit(key, number)
 
     # ------------------------------------------------------------- refusals

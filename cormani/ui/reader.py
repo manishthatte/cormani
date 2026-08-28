@@ -61,6 +61,7 @@ def format_full_date(iso: str) -> str:
 class Reader(QWidget):
     command = Signal(str)
     link_activated = Signal(str)          # a link in the body; the window opens it
+    correspondent_clicked = Signal(str)   # from_addr when the correspondent is clicked
     status_message = Signal(str)          # what an open or a save did
     invitation_answered = Signal(str)     # a response to the invitation shown
     invitation_dismissed = Signal()       # a cancellation, acted on
@@ -97,8 +98,10 @@ class Reader(QWidget):
         who.setSpacing(8)
         self.correspondent = QLabel("")
         self.correspondent.setMinimumWidth(100)
+        self.correspondent.setCursor(Qt.CursorShape.PointingHandCursor)
         self.correspondent.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse)
+            Qt.TextInteractionFlag.TextBrowserInteraction)
+        self.correspondent.linkActivated.connect(self._correspondent_link)
         who.addWidget(self.correspondent)
         who.addStretch(1)
         self.account_swatch = QLabel("")
@@ -191,8 +194,13 @@ class Reader(QWidget):
         self.subject.setText(row.subject_label)
         name = row.from_name or row.from_addr
         address = row.from_addr
-        self.correspondent.setText(
-            f"{name} · {address}" if name and name != address else address)
+        if address:
+            shown = name if name and name != address else address
+            self.correspondent.setText(
+                f'<a href="{address}">{shown}</a>'
+                + (f' · {address}' if name and name != address else ""))
+        else:
+            self.correspondent.setText(name or "")
         self.account.setText(row.account_label)
         self.account_swatch.setVisible(bool(row.account_colour))
         self.when.setText(format_full_date(row.date_at))
@@ -251,6 +259,10 @@ class Reader(QWidget):
         self._allow_remote = True
         self._render()
 
+    def _correspondent_link(self, address: str) -> None:
+        if address:
+            self.correspondent_clicked.emit(address)
+
     def message_id(self) -> int | None:
         """Which message is being read, for anything that needs to ask the
         store about it. The row itself stays private: a caller given the row
@@ -263,6 +275,7 @@ class Reader(QWidget):
             self.tracking.set_theme(theme)
         self.commands.apply_theme(theme)
         self.attachments.apply_theme(theme)
+        self.inline.apply_theme(theme)
         if self._row is not None:
             # The body is an HTML document with its colours baked in, so a
             # theme change has to redraw it rather than restyle it.
@@ -275,7 +288,9 @@ class Reader(QWidget):
             return
         self.subject.setStyleSheet(
             f"font-size: 15pt; font-weight: 600; color: {t.text_strong};")
-        self.correspondent.setStyleSheet(f"color: {t.text}; font-weight: 500;")
+        self.correspondent.setStyleSheet(
+            f"color: {t.text}; font-weight: 500;")
+        self.correspondent.setOpenExternalLinks(False)
         self.account.setStyleSheet(f"color: {t.text_muted};")
         self.when.setStyleSheet(f"color: {t.text_muted};")
         self.tracking.setStyleSheet(f"color: {t.owed}; font-style: italic;")

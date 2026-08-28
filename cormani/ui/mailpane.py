@@ -35,13 +35,15 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QUrl
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QFrame, QLabel, QSplitter, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QFrame, QLabel, QSplitter, QVBoxLayout,
+                               QWidget)
 
 from ..platform import desktop
 from ..store import edits as edits_repo
 from ..store import messages as messages_repo
+from ..store import views as views_repo
 from . import listfooter
 from . import shortcuts as shortcuts_mod
 from .actions import Actions
@@ -56,9 +58,9 @@ from .trackhost import TrackHost
 from . import panequery
 from . import panespace
 from . import panestate
+from . import responsiverail
 from .reader import Reader
 from .tabs import ViewState
-
 
 
 class MailPane(QWidget):
@@ -88,6 +90,7 @@ class MailPane(QWidget):
         # cached against the query it belongs to. `ui/listfooter.py` owns both
         # the numbers and the sentences they go into.
         self._counts = listfooter.Counts(con)
+        self._owed_count = 0
         # Where inline images may be read from, and nowhere else. None in the
         # tests and in demo mode, which is why an absent root means no inline
         # image is served rather than a fallback that serves any file.
@@ -114,10 +117,23 @@ class MailPane(QWidget):
         middle_layout.setSpacing(4)
         self.quick_filter = QuickFilterBar(con, middle)
         middle_layout.addWidget(self.quick_filter)
+        responsiverail.install(self)
+        self.unread_banner = QLabel("", middle)
+        self.unread_banner.setWordWrap(True)
+        self.unread_banner.setVisible(False)
+        middle_layout.addWidget(self.unread_banner)
         self.list = MessageList(middle)
         middle_layout.addWidget(self.list, 1)
         self.list_footer = QLabel("", middle)
         self.list_footer.setFrameShape(QFrame.Shape.NoFrame)
+        self.list_footer.setTextFormat(Qt.TextFormat.RichText)
+        self.list_footer.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextBrowserInteraction)
+        self.list_footer.linkActivated.connect(
+            lambda link: listfooter.footer_link_action(
+                link, owed=self._owed_count,
+                select_rail=self.rail.select_key,
+                show_tracking=self.show_tracking))
         middle_layout.addWidget(self.list_footer)
         self.splitter.addWidget(middle)
 
@@ -183,6 +199,7 @@ class MailPane(QWidget):
             lambda text: self.actions.inline_reply(text))
         self.reader.inline.expand_requested.connect(
             lambda text: self.compose("reply", prefill=text))
+        self.reader.correspondent_clicked.connect(self._correspondent_clicked)
         self.model.counts_changed.connect(self._counts_changed)
         selection = self.list.selectionModel()
         if selection is not None:
@@ -271,6 +288,13 @@ class MailPane(QWidget):
         self.tracking.open()
         self.view_changed.emit()
 
+    def show_mail(self) -> None:
+        """Return to the message list from calendar, tracking, contacts or sites."""
+        panestate.show_mail(self)
+
+    def showing_mail(self) -> bool:
+        return panestate.showing_mail(self)
+
     def showing_tracking(self) -> bool:
         return self.tracking.showing
 
@@ -341,14 +365,7 @@ class MailPane(QWidget):
         return self.sites.showing
 
     def show_site(self, site_key: str) -> bool:
-        """Open one site's panel. The Panels menu's verb.
-
-        THROUGH THE RAIL AND NOT STRAIGHT TO THE HOST, so that the rail's
-        selection follows the panel. A panel shown with no row highlighted
-        leaves the window disagreeing with itself about what it is showing —
-        and `ui/panestate.py` records the RAIL's key, so a tab restored after
-        the fact would come back to the mail rather than to the site.
-        """
+        """Open one site's panel through the rail — ui/panestate records the rail key."""
         from ..panels import sites as sites_mod
 
         return self.rail.select_key(sites_mod.rail_key(site_key))
@@ -395,6 +412,7 @@ class MailPane(QWidget):
 
     def _filters_changed(self, filters) -> None:
         panequery.filters_changed(self, filters)
+        self._update_unread_banner()
 
     def set_sort(self, sort) -> None:
         panequery.set_sort(self, sort)
@@ -422,23 +440,43 @@ class MailPane(QWidget):
         self._selection_repaint()
 
     def _selection_repaint(self) -> None:
-        """The command bar follows the cursor. Here rather than in the action
-        dispatch: it is about what the reading pane shows."""
         self.reader.commands.set_message(self.current_row())
+
+    def _update_unread_banner(self) -> None:
+        message = listfooter.unread_banner_message(
+            filters=self.model.filters, showing_mail=self.showing_mail())
+        self.unread_banner.setText(message)
+        self.unread_banner.setVisible(bool(message))
+
+    def _correspondent_clicked(self, address: str) -> None:
+        if msg := self.contacts.open_by_address(address):
+            self.status_message.emit(msg)
+        else:
+            self.view_changed.emit()
+
+    def _owed_in_footer(self) -> int:
+        return listfooter.owed_in_footer(
+            self._con, showing_mail=self.showing_mail(),
+            search_active=self.model.search.active,
+            scope_role=self.model.scope.role)
 
     def _update_empty_text(self) -> None:
         self.list.set_empty_text(listfooter.empty_text(
             search=self.model.search, filters=self.model.filters,
             scope=self.model.scope))
+        self._update_unread_banner()
 
     def _counts_changed(self, loaded: int, total: int) -> None:
         discarded, conversations = (
             self._counts.of(self.model)
             if (self.model.search.active or self.model.grouping) else (0, 0))
-        self.list_footer.setText(listfooter.footer_text(
+        self._owed_count = self._owed_in_footer()
+        text = listfooter.footer_text(
             loaded=loaded, total=total, search=self.model.search,
             grouping=self.model.grouping, discarded=discarded,
-            conversations=conversations))
+            conversations=conversations, owed=self._owed_count)
+        self.list_footer.setText(
+            listfooter.footer_with_owed_link(text, self._owed_count))
         self.counts_changed.emit(loaded, total)
 
     def _forget_discarded(self) -> None:
@@ -550,6 +588,10 @@ class MailPane(QWidget):
         self.reader.invitation.apply_theme(theme)
         self.list_footer.setStyleSheet(
             f"color: {theme.text_muted}; padding: 2px 6px;")
+        self.unread_banner.setStyleSheet(
+            f"color: {theme.text_strong}; background: {theme.surface_raised}; "
+            f"border: 1px solid {theme.border}; border-radius: 4px; "
+            f"padding: 4px 8px;")
 
     def set_density(self, density) -> None:
         self.rail.set_density(density)

@@ -24,10 +24,12 @@
 # © Manish Jagdish Thatte
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 from typing import Sequence
 
 from .. import APP_NAME
+from ..config import settings as config_mod
 from ..platform import notify as notify_mod
 from ..store import messages as messages_repo
 
@@ -81,8 +83,25 @@ def describe(con: sqlite3.Connection, message_ids: Sequence[int]) -> tuple:
     return (title, "\n".join(lines))
 
 
+def in_quiet_hours(*, now: dt.datetime | None = None,
+                   settings: config_mod.Settings | None = None) -> bool:
+    settings = settings or config_mod.load()
+    if not settings.notify_quiet_enabled:
+        return False
+    now = now or dt.datetime.now().astimezone()
+    hour = now.hour
+    start = int(settings.notify_quiet_start)
+    end = int(settings.notify_quiet_end)
+    if start == end:
+        return True
+    if start < end:
+        return start <= hour < end
+    return hour >= start or hour < end
+
+
 def announce(results: Sequence, con: sqlite3.Connection, *,
-             notifier=None, window_active: bool = False) -> str | None:
+             notifier=None, window_active: bool = False,
+             settings: config_mod.Settings | None = None) -> str | None:
     """Tell the desktop about new mail. Returns the status-bar fallback, or None.
 
     None means nothing to say — no mail, still fetching, or the window is the
@@ -97,7 +116,9 @@ def announce(results: Sequence, con: sqlite3.Connection, *,
     title, body = describe(con, ids)
     if not title:
         return None
+    words = f"{title} — {body}" if body else title
+    if in_quiet_hours(settings=settings):
+        return words
     send = notifier or notify_mod.notify
     sent = bool(send(title, body))
-    words = f"{title} — {body}" if body else title
     return None if sent else words

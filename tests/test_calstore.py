@@ -413,9 +413,18 @@ class Editing(unittest.TestCase):
         self.assertEqual([(o.kind, o.stuck) for o in stuck], [("create", True)])
         self.assertEqual(eventqueue.counts(self.con)[self.account]["stuck"], 1)
 
-    def test_moving_between_calendars_says_it_is_not_offered(self):
-        with self.assertRaises(eventedits.NotSupported):
-            eventedits.move_to_calendar(self.con, self.make(), self.calendar)
+    def test_moving_between_calendars_recreates_on_the_target(self):
+        other = make_calendar(self.con, self.account, "work", name="Work")
+        event_id = self.make()
+        title = events_repo.get_event(self.con, event_id).summary
+        new_id = eventedits.move_to_calendar(self.con, event_id, other)
+        moved = events_repo.get_event(self.con, new_id)
+        self.assertIsNotNone(moved)
+        self.assertEqual(moved.calendar_id, other)
+        self.assertEqual(moved.summary, title)
+        self.assertEqual(
+            self.con.execute("SELECT COUNT(*) FROM event").fetchone()[0], 1)
+        self.assertEqual([op.kind for op in self.ops()], ["create"])
 
 
 if __name__ == "__main__":

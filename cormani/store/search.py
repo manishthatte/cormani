@@ -69,6 +69,7 @@ import sqlite3
 from dataclasses import dataclass, replace
 
 from . import folders as folders_repo
+from . import times
 
 # A field prefix, and the FTS5 column behind it. `to` covers Cc as well: the
 # index puts both in `to_repr`, because a message addressed to you in Cc was
@@ -101,6 +102,7 @@ WITHIN = (
     ("7d", "Last 7 days"),
     ("30d", "Last 30 days"),
     ("year", "This year"),
+    ("custom", "Custom range…"),
 )
 _WITHIN_LABEL = dict(WITHIN)
 
@@ -187,6 +189,8 @@ class Query:
     subject: str = ""           # the Subject chip
     attachment: bool = False    # the Attachment chip
     within: str = ""            # the Date chip: a key from WITHIN
+    date_from: str = ""         # custom range start, YYYY-MM-DD local
+    date_to: str = ""           # custom range end, YYYY-MM-DD local
     account_id: int | None = None   # the Account chip; None is every account
     # The Trash & Junk chip. NOT part of `active`: "include the mail I threw
     # away" is a qualifier on a search and not a search, and turning it on with
@@ -199,7 +203,8 @@ class Query:
         matching every message in every account is not a search, it is a wait."""
         return bool(self.text.strip() or self.sender.strip()
                     or self.subject.strip() or self.attachment
-                    or self.within or self.account_id is not None)
+                    or self.within or self.date_from or self.date_to
+                    or self.account_id is not None)
 
     @property
     def terms(self) -> tuple[Term, ...]:
@@ -228,8 +233,15 @@ class Query:
             parts.append(f"subject {self.subject.strip()}")
         if self.attachment:
             parts.append("with an attachment")
-        if self.within:
+        if self.within and self.within != "custom":
             parts.append(_WITHIN_LABEL.get(self.within, self.within).lower())
+        if self.date_from or self.date_to:
+            if self.date_from and self.date_to:
+                parts.append(f"from {self.date_from} to {self.date_to}")
+            elif self.date_from:
+                parts.append(f"from {self.date_from}")
+            else:
+                parts.append(f"until {self.date_to}")
         described = ", ".join(parts) or "everything"
         return f"{described}, including Trash and Junk" if self.discarded else described
 
@@ -274,6 +286,32 @@ def since(within: str, now: dt.datetime | None = None) -> str | None:
     else:
         return None
     return start.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _day_start(date_text: str) -> str | None:
+    """Midnight local on this calendar date, as UTC ISO."""
+    text = (date_text or "").strip()
+    if not text:
+        return None
+    try:
+        day = dt.date.fromisoformat(text)
+    except ValueError:
+        return None
+    start = dt.datetime.combine(day, dt.time.min)
+    return times.to_utc_text(start)
+
+
+def _day_end(date_text: str) -> str | None:
+    """Last instant local on this calendar date, as UTC ISO."""
+    text = (date_text or "").strip()
+    if not text:
+        return None
+    try:
+        day = dt.date.fromisoformat(text)
+    except ValueError:
+        return None
+    end = dt.datetime.combine(day, dt.time(23, 59, 59))
+    return times.to_utc_text(end)
 
 
 # --------------------------------------------------------------------- SQL
@@ -325,13 +363,19 @@ def where_sql(query: Query | None, *,
     if query.account_id is not None:
         clauses.append("f.account_id = ?")
         params.append(int(query.account_id))
-    start = since(query.within, now)
+    start = _day_start(query.date_from) if query.date_from else None
+    end = _day_end(query.date_to) if query.date_to else None
     if start is not None:
-        # Text comparison, and it is exact: every stored timestamp is written
-        # by `imap.envelope` in one shape — UTC, seconds, `+00:00` — so the
-        # lexical order and the chronological order are the same order.
         clauses.append("m.date_at >= ?")
         params.append(start)
+    if end is not None:
+        clauses.append("m.date_at <= ?")
+        params.append(end)
+    if start is None and end is None:
+        preset = since(query.within, now) if query.within and query.within != "custom" else None
+        if preset is not None:
+            clauses.append("m.date_at >= ?")
+            params.append(preset)
     return (" AND ".join(clauses), params)
 
 

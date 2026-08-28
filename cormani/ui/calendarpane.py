@@ -329,6 +329,37 @@ class CalendarPane(QWidget):
         self.view().select_event(0)
         self.reload()
 
+    def move_event(self) -> None:
+        event = self.detail.current_event()
+        calendar = self.detail.current_calendar()
+        if event is None or calendar is None:
+            return
+        from PySide6.QtWidgets import QInputDialog
+
+        choices = [c for c in calendars_repo.list_calendars(self._con)
+                   if c.writable and c.id != event.calendar_id]
+        if not choices:
+            self.status_message.emit(
+                "No other writable calendar to move this event to.")
+            return
+        labels = [c.label for c in choices]
+        picked, ok = QInputDialog.getItem(
+            self, "Move event", "Move to which calendar?", labels, 0, False)
+        if not ok or not picked:
+            return
+        target = next(c for c in choices if c.label == picked)
+        try:
+            new_id = eventedits.move_to_calendar(
+                self._con, event.id, target.id)
+        except (eventedits.NotWritable, eventedits.NotSupported) as exc:
+            self.status_message.emit(str(exc))
+            return
+        self.status_message.emit(
+            f"{event.title} moved to {target.label} — the provider is told "
+            f"on the next sync")
+        self.view().select_event(new_id)
+        self.reload()
+
     def _respond(self, response: str) -> None:
         event = self.detail.current_event()
         if event is None:
@@ -343,6 +374,8 @@ class CalendarPane(QWidget):
             self.edit_event()
         elif name == "delete":
             self.delete_event()
+        elif name == "move":
+            self.move_event()
         elif name == "open":
             event = self.detail.current_event()
             opener = self._dialogs.get("open_url")

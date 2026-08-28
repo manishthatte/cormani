@@ -27,5 +27,5 @@ Description: correspondence client for mail, calendar and messaging sites
  Messaging services that publish no interface for personal conversations
  appear as panels in the same window.
  .
- This package is for the author's own machine until stage 9 (hardening) has
- passed; it is not a release for other people.
+ corMani is a desktop correspondence client for Linux and Windows, built on
+ PySide6 with an offline-first mail store.

@@ -59,6 +59,31 @@ class TestRailModel(unittest.TestCase):
         folder = self.model.index(0, 0, index)
         self.assertEqual(folder.data(rail_model.ColourRole), account.colour)
 
+    def test_every_node_answers_error_role_so_the_delegate_can_paint(self):
+        # `error` was added to Node without a default once; paint then raised
+        # AttributeError on Inbox and every other row, and the rail went blank.
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QPainter, QPixmap
+        from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
+
+        from cormani.ui import theme as theme_mod
+        from cormani.ui.rail import RailDelegate
+
+        index = self.model.index_for_key("unified:inbox")
+        self.assertFalse(index.data(rail_model.ErrorRole))
+        delegate = RailDelegate()
+        delegate.theme = theme_mod.resolved(
+            theme_mod.SOLARIZED_LIGHT, self.app.palette())
+        pix = QPixmap(200, 24)
+        pix.fill()
+        opt = QStyleOptionViewItem()
+        opt.rect = QRect(0, 0, 200, 24)
+        opt.state = QStyle.StateFlag.State_Enabled
+        opt.font = self.app.font()
+        painter = QPainter(pix)
+        delegate.paint(painter, opt, index)
+        painter.end()
+
     def test_only_a_leaf_that_means_something_is_selectable(self):
         for key, selectable in (("section:unified", False), ("unified:inbox", True),
                                 ("site:whatsapp", False), ("hint:calendars", False)):

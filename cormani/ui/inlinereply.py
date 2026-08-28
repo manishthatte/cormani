@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QHBoxLayout, QPlainTextEdit, QPushButton,
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QPlainTextEdit, QPushButton,
                                QVBoxLayout, QWidget)
 
 # Three lines. Enough for the sentence this exists for, small enough that the
@@ -46,27 +46,34 @@ class InlineReply(QWidget):
         super().__init__(parent)
         self._row = None
 
+        self.frame = QFrame(self)
+        self.frame.setFrameShape(QFrame.Shape.StyledPanel)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 4, 0, 0)
-        outer.setSpacing(4)
+        outer.setSpacing(0)
+        outer.addWidget(self.frame)
 
-        self.text = QPlainTextEdit(self)
+        inner = QVBoxLayout(self.frame)
+        inner.setContentsMargins(8, 6, 8, 6)
+        inner.setSpacing(4)
+
+        self.text = QPlainTextEdit(self.frame)
         self.text.setPlaceholderText("Reply inline…")
         self.text.setTabChangesFocus(True)
         metrics = self.text.fontMetrics()
         self.text.setFixedHeight(metrics.lineSpacing() * LINES + 12)
-        outer.addWidget(self.text)
+        inner.addWidget(self.text)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        self.send_button = QPushButton("Send reply", self)
+        self.send_button = QPushButton("Send reply", self.frame)
         self.send_button.clicked.connect(self.send)
         row.addWidget(self.send_button)
-        self.expand_button = QPushButton("Open in composer", self)
+        self.expand_button = QPushButton("Open in composer", self.frame)
         self.expand_button.clicked.connect(self.expand)
         row.addWidget(self.expand_button)
         row.addStretch(1)
-        outer.addLayout(row)
+        inner.addLayout(row)
 
         send = QAction("Send reply", self)
         send.setShortcuts([QKeySequence("Ctrl+Return"), QKeySequence("Ctrl+Enter")])
@@ -124,6 +131,9 @@ class InlineReply(QWidget):
         self.text.clear()
 
     def apply_theme(self, theme) -> None:
+        self.frame.setStyleSheet(
+            f"QFrame {{ background: {theme.surface_raised}; "
+            f"border: 1px solid {theme.border}; border-radius: 6px; }}")
         self.text.setStyleSheet(
             f"QPlainTextEdit {{ border: 1px solid {theme.border}; "
-            f"border-radius: 4px; padding: 4px; }}")
+            f"background: {theme.surface}; border-radius: 4px; padding: 4px; }}")

@@ -66,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "person twice. Give a QUERY to narrow it to one "
                              "name, organisation or address, which also turns "
                              "on the per-contact mail counts")
+    parser.add_argument("--import-vcard", metavar="PATH",
+                        help="import contacts from a vCard 3.0 file into the "
+                             "address book")
+    parser.add_argument("--export-vcard", metavar="PATH",
+                        help="export the address book to a vCard 3.0 file")
     parser.add_argument("--searches", action="store_true",
                         help="report every saved search — what each one asks "
                              "for, how much mail it holds, and whether it "
@@ -198,6 +203,12 @@ def _dispatch(argv: list[str] | None) -> int:
     # fall through to opening a window.
     if args.contacts is not None:
         return contactcli.contacts(args.contacts)
+
+    if args.import_vcard:
+        return contactcli.import_vcard(args.import_vcard)
+
+    if args.export_vcard:
+        return contactcli.export_vcard(args.export_vcard)
 
     if args.set_oauth:
         return configure.set_oauth(args.set_oauth)

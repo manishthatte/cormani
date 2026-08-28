@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 from .calendarschema import MIGRATION_6, MIGRATION_7
+from .enhanceschema import MIGRATION_11
 from .importschema import MIGRATION_10
 from .rulesschema import MIGRATION_9
 from .trackschema import MIGRATION_8
@@ -416,6 +417,7 @@ MIGRATIONS: list[tuple[int, str, str]] = [
     (8, "the tracking layer: threads across channels", MIGRATION_8),
     (9, "filters that run on arrival, and saved searches", MIGRATION_9),
     (10, "Thunderbird / mbox import resume state", MIGRATION_10),
+    (11, "snooze until a chosen time", MIGRATION_11),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

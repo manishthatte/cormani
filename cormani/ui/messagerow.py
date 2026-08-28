@@ -43,6 +43,7 @@ from .models import messages as message_model
 # (id, glyph, tooltip). Order is left to right, and is deliberate: the
 # destructive one is furthest from where the cursor arrives.
 HOVER_ACTIONS = (
+    ("reply", "reply", "Reply"),
     ("mark_read", "envelope", "Mark read or unread"),
     ("flag", "flag", "Flag"),
     ("archive", "archive", "Archive"),

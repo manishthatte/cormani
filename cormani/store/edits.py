@@ -30,6 +30,7 @@ from typing import Sequence
 
 from . import folders as folders_repo
 from . import pending as pending_repo
+from . import snooze as snooze_repo
 
 
 def set_seen(con: sqlite3.Connection, message_ids: Sequence[int],
@@ -142,3 +143,17 @@ def trash(con: sqlite3.Connection,
     performs deliberately.
     """
     return move_to_role(con, message_ids, folders_repo.ROLE_TRASH)
+
+
+def snooze(con: sqlite3.Connection, message_ids: Sequence[int],
+           until: str) -> int:
+    return snooze_repo.snooze(con, message_ids, until)
+
+
+def clear_snooze(con: sqlite3.Connection,
+                 message_ids: Sequence[int]) -> int:
+    return snooze_repo.snooze(con, message_ids, "")
+
+
+def clear_expired_snoozes(con: sqlite3.Connection) -> int:
+    return snooze_repo.clear_expired(con)

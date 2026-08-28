@@ -6,13 +6,8 @@
 # Reply, Reply all and Forward are the three things done most often in a mail
 # client and putting them behind a menu costs a click every time.
 #
-# HALF OF THESE BUTTONS DO NOT WORK YET, AND SAY SO. Archive, Flag, Mark read
-# and Delete are store operations and work now. Reply, Reply all, Forward and
-# Snooze need a composer and a scheduler, which are stages 4 and beyond; they
-# are visible, disabled, and their tooltip names the stage. That is deliberate:
-# a bar that grows buttons over eight stages moves the ones people have learned
-# the position of, and a disabled button is honest in a way a missing one is
-# not. CONVENTIONS.txt §8.
+# WHETHER A BUTTON WORKS comes from `ui/commands.py`, not from this file.
+# Disabled controls name what is missing in their tooltip — CONVENTIONS.txt §8.
 #
 # © Manish Jagdish Thatte
 from __future__ import annotations
@@ -20,6 +15,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QToolButton, QWidget
 
+from . import commands as commands_mod
 from . import icons
 
 # The width a command needs with its label off, and the floor the layout may
@@ -29,7 +25,7 @@ from . import icons
 # rail, and which is the wrong answer.
 _ICON_ONLY_WIDTH = 32
 
-# (id, label, glyph, ready, primary, tooltip)
+# (id, label, glyph, primary)
 #
 # PRIMARY commands keep their labels. PLAN.txt §2 asks for Reply, Reply all and
 # Forward "as buttons, not a menu", and a button whose label has been dropped to
@@ -37,21 +33,16 @@ _ICON_ONLY_WIDTH = 32
 # are recognisable shapes, and reserving label space for eight commands is what
 # made this bar wide enough to squeeze the rail flat.
 COMMANDS = (
-    ("reply", "Reply", "reply", False, True,
-     "Reply to the sender — arrives with stage 4"),
-    ("reply_all", "Reply all", "reply-all", False, True,
-     "Reply to everyone — arrives with stage 4"),
-    ("forward", "Forward", "forward", False, True,
-     "Forward the message — arrives with stage 4"),
-    (None, None, None, True, False, None),                # separator
-    ("archive", "Archive", "archive", True, False,
-     "Move to this account's archive folder"),
-    ("flag", "Flag", "flag", True, False, "Flag or unflag"),
-    ("mark_read", "Mark read", "envelope", True, False, "Toggle the read state"),
-    ("delete", "Delete", "trash", True, False,
-     "Move to this account's trash folder"),
-    ("snooze", "Snooze", "snooze", False, False,
-     "Take it off the list and bring it back later — arrives with stage 4"),
+    ("compose", "New", "plus", True),
+    ("reply", "Reply", "reply", True),
+    ("reply_all", "Reply all", "reply-all", True),
+    ("forward", "Forward", "forward", True),
+    (None, None, None, False),                            # separator
+    ("archive", "Archive", "archive", False),
+    ("flag", "Flag", "flag", False),
+    ("mark_read", "Mark read", "envelope", False),
+    ("delete", "Delete", "trash", False),
+    ("snooze", "Snooze", "snooze", False),
 )
 
 
@@ -62,7 +53,6 @@ class CommandBar(QWidget):
         super().__init__(parent)
         self._buttons: dict[str, QToolButton] = {}
         self._glyphs: dict[str, str] = {}
-        self._ready: dict[str, bool] = {}
         self._primary: dict[str, bool] = {}
         self._has_message = False
 
@@ -70,7 +60,7 @@ class CommandBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(3)
 
-        for command_id, label, glyph, ready, primary, tip in COMMANDS:
+        for command_id, label, glyph, primary in COMMANDS:
             if command_id is None:
                 line = QFrame(self)
                 line.setFrameShape(QFrame.Shape.VLine)
@@ -79,14 +69,15 @@ class CommandBar(QWidget):
                 continue
             button = QToolButton(self)
             button.setText(label)
-            button.setToolTip(tip)
+            tip = commands_mod.command_tooltip(command_id)
+            if tip:
+                button.setToolTip(tip)
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             button.setAutoRaise(True)
             button.setMinimumWidth(_ICON_ONLY_WIDTH)
             button.clicked.connect(lambda _=False, c=command_id: self.command.emit(c))
             self._buttons[command_id] = button
             self._glyphs[command_id] = glyph
-            self._ready[command_id] = ready
             self._primary[command_id] = primary
             layout.addWidget(button)
         layout.addStretch(1)
@@ -94,6 +85,11 @@ class CommandBar(QWidget):
         self._labelled_width = self._measure_labelled()
         self._apply_button_style(self.width())
         self.set_message(None)
+
+    def _ready(self, command_id: str) -> bool:
+        if command_id == "compose":
+            return commands_mod.command_ready(command_id)
+        return commands_mod.command_ready(command_id)
 
     def _measure_labelled(self) -> int:
         """How wide the bar needs to be with the primary labels showing.
@@ -129,7 +125,9 @@ class CommandBar(QWidget):
         buttons whose meaning depends on it."""
         self._has_message = row is not None
         for command_id, button in self._buttons.items():
-            button.setEnabled(self._ready[command_id] and self._has_message)
+            needs_message = command_id != "compose"
+            ready = self._ready(command_id)
+            button.setEnabled(ready and (self._has_message or not needs_message))
         for command_id, when_set, when_clear in (
                 ("mark_read", "Mark unread", "Mark read"),
                 ("flag", "Unflag", "Flag")):
@@ -146,7 +144,8 @@ class CommandBar(QWidget):
 
     def apply_theme(self, theme) -> None:
         for command_id, button in self._buttons.items():
-            colour = theme.text_strong if self._ready[command_id] else theme.text_muted
+            colour = (theme.text_strong if self._ready(command_id)
+                      else theme.text_muted)
             button.setIcon(icons.icon(self._glyphs[command_id], colour, 15))
         # Re-measured HERE, not at construction. The icons are applied with the
         # theme, and a button measured before it has one is measured too narrow —

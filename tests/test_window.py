@@ -13,6 +13,7 @@
 #
 # © Manish Jagdish Thatte
 import unittest
+from unittest import mock
 
 from cormani.store import accounts, messages, views
 from cormani.ui import density as density_mod
@@ -121,9 +122,11 @@ class TestMainWindow(unittest.TestCase):
         # than one that is visibly not ready.
         w = self._window()
         self.assertFalse(w.act_sync.isEnabled())
-        # Snooze is stage 6's — triage, with somewhere to keep a deadline —
-        # and the button says so rather than doing nothing.
-        self.assertFalse(w.mail.reader.commands._buttons["snooze"].isEnabled())
+
+    def test_snooze_is_ready_when_a_message_is_selected(self):
+        w = self._window()
+        w.mail.select_row(0)
+        self.assertTrue(w.mail.reader.commands._buttons["snooze"].isEnabled())
 
     def test_the_search_box_and_its_chips_are_live_now(self):
         # They were disabled placeholders until item 16. The pairing with the
@@ -161,7 +164,7 @@ class TestMainWindow(unittest.TestCase):
     def test_store_summary_is_settable(self):
         w = self._window()
         w.set_store_summary("schema v3 · 0 accounts")
-        self.assertIn("schema v3", w.status_store.text())
+        self.assertIn("schema v3", w.status_counts.toolTip())
 
     def test_the_demo_window_says_it_is_demo_data(self):
         w = self._window()
@@ -371,8 +374,8 @@ class TestMainWindow(unittest.TestCase):
         w.mail.select_row(0)
         row = w.mail.current_row()
         before = w.mail.model.rowCount()
-        w.mail.run_action("snooze", [row.id])
-        self.assertIn("stage 6", w.status_message.text())
+        with mock.patch("cormani.ui.snoozedialog.ask", return_value=""):
+            w.mail.run_action("snooze", [row.id])
         self.assertEqual(w.mail.model.rowCount(), before)
 
     def test_the_reading_pane_s_buttons_reach_the_same_actions(self):
@@ -393,8 +396,10 @@ class TestMainWindow(unittest.TestCase):
     def test_a_reading_pane_button_with_no_body_yet_says_so_there_too(self):
         w = self._window()
         w.mail.select_row(0)
-        w.mail.reader.command.emit("snooze")
-        self.assertIn("stage 6", w.status_message.text())
+        before = w.mail.model.rowCount()
+        with mock.patch("cormani.ui.snoozedialog.ask", return_value=""):
+            w.mail.reader.command.emit("snooze")
+        self.assertEqual(w.mail.model.rowCount(), before)
 
     def test_what_the_attachment_strip_did_reaches_the_status_bar(self):
         w = self._window()

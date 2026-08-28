@@ -44,6 +44,7 @@ from typing import Sequence
 
 from . import folders as folders_repo
 from . import search as search_mod
+from . import snooze as snooze_mod
 from . import tags as tags_repo
 from . import threads as threads_mod
 from . import views as views_mod
@@ -204,6 +205,7 @@ def _row(r: sqlite3.Row, tags: tuple = (), snippet: str = "",
 def fetch(con: sqlite3.Connection, scope: views_mod.Scope, filters: views_mod.Filters | None = None,
           sort: views_mod.Sort | None = None, *, search=None, threaded: bool = False,
           limit: int = 200, offset: int = 0) -> list[Row]:
+    snooze_mod.clear_expired(con)
     filters = filters or views_mod.Filters()
     sort = sort or views_mod.Sort()
     search = search if views_mod.searching(search) else None

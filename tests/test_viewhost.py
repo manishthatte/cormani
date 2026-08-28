@@ -305,7 +305,7 @@ class TestTheMenu(ViewHostCase):
     def test_an_empty_store_says_so_rather_than_showing_nothing(self):
         # An empty submenu reads as a broken menu.
         entries = self.entries()
-        self.assertEqual(entries, ["none saved yet"])
+        self.assertEqual(entries, ["(none saved)"])
         self.assertFalse(self.window.saved_views_menu.actions()[0].isEnabled())
 
     def test_every_saved_search_is_listed_INCLUDING_the_hidden_ones(self):
@@ -316,7 +316,7 @@ class TestTheMenu(ViewHostCase):
         self.assertEqual(self.entries(), ["Drawn", "Hidden"])
 
     def test_the_menu_is_rebuilt_rather_than_kept(self):
-        self.assertEqual(self.entries(), ["none saved yet"])
+        self.assertEqual(self.entries(), ["(none saved)"])
         savedviews.save_view(self.con, savedviews.SavedView(
             name="Later", filters=views.Filters(unread=True)))
         self.assertEqual(self.entries(), ["Later"])

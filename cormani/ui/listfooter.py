@@ -26,6 +26,44 @@ from __future__ import annotations
 from ..store import views as views_repo
 
 
+def unread_banner_message(*, filters, showing_mail: bool) -> str:
+    """Message for the banner when the unread quick filter is on."""
+    if filters.unread and showing_mail:
+        return ("Unread filter is on — reading a message will not mark it read "
+                "until you turn the filter off.")
+    return ""
+
+
+def owed_in_footer(con, *, showing_mail: bool, search_active: bool,
+                   scope_role: str) -> int:
+    """Owed count for the list footer when viewing ordinary mail."""
+    if not showing_mail or search_active:
+        return 0
+    if scope_role == views_repo.ROLE_OWED:
+        return 0
+    from ..store import messages as messages_repo
+    return messages_repo.scope_counts(con).get("owed", 0)
+
+
+def footer_with_owed_link(text: str, owed: int) -> str:
+    """Turn the owed phrase into a clickable link when present."""
+    if not owed:
+        return text
+    word = "reply" if owed == 1 else "replies"
+    plain = f"{owed} owed {word}"
+    return text.replace(plain, f'<a href="owed">{plain}</a>', 1)
+
+
+def footer_link_action(link: str, *, owed: int, select_rail, show_tracking) -> None:
+    """Follow a footer link — owed scope or the tracking tab."""
+    if link != "owed":
+        return
+    if owed:
+        select_rail("unified:owed")
+    else:
+        show_tracking()
+
+
 def empty_text(*, search, filters, scope) -> str:
     """What an empty list says about itself."""
     if search.active:
@@ -38,7 +76,8 @@ def empty_text(*, search, filters, scope) -> str:
 
 
 def footer_text(*, loaded: int, total: int, search, grouping: bool,
-                discarded: int = 0, conversations: int = 0) -> str:
+                discarded: int = 0, conversations: int = 0,
+                owed: int = 0) -> str:
     """The line under the list, for either kind of view."""
     if search.active:
         parts = [f"{total} found" if loaded >= total
@@ -53,6 +92,9 @@ def footer_text(*, loaded: int, total: int, search, grouping: bool,
                else f"{loaded} of {total} messages")
     if grouping:
         counted += f" in {conversations} conversations"
+    if owed:
+        word = "reply" if owed == 1 else "replies"
+        counted += f" · {owed} owed {word}"
     return counted
 
 

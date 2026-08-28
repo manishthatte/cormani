@@ -112,15 +112,24 @@ SITES: tuple = (
          url="https://www.facebook.com/messages/t/",
          hint="Sign in as usual. This opens Messenger inside Facebook rather "
               "than the separate Messenger site."),
-    # The two optional ones. Mail from these accounts is already in corMani
-    # over IMAP; the panel is for the occasion when only the provider's own
-    # interface will do — a Google Doc shared in a mail, a Teams invitation
+    Site(key="telegram", name="Telegram Web",
+         url="https://web.telegram.org/",
+         hint="Sign in with the phone number Telegram knows. A code arrives "
+              "by SMS or in the Telegram app on your phone."),
+    Site(key="signal", name="Signal",
+         url="https://signal.org/",
+         hint="Signal has no full web client for messaging. This opens "
+              "signal.org — use Signal Desktop or your phone for messages.",
+         default_on=False),
+    # The two optional webmail panels. Mail from these accounts is already in
+    # corMani over IMAP; the panel is for the occasion when only the provider's
+    # own interface will do — a Google Doc shared in a mail, a Teams invitation
     # that will not open anywhere else.
-    Site(key="gmail", name="Gmail (web)", url="https://mail.google.com/",
+    Site(key="gmail", name="Gmail (web only)", url="https://mail.google.com/",
          hint="The web interface for a Google account. corMani already holds "
               "this mail over IMAP; this is for what only the web can do.",
          default_on=False),
-    Site(key="outlook", name="Outlook (web)",
+    Site(key="outlook", name="Outlook (web only)",
          url="https://outlook.office.com/mail/",
          hint="The web interface for a Microsoft account. corMani already "
               "holds this mail over IMAP.",

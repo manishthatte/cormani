@@ -28,24 +28,26 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import QByteArray, QSettings
+from PySide6.QtCore import QByteArray, QSettings, Qt
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QApplication, QLabel, QMainWindow, QMenuBar,
-                               QStatusBar, QVBoxLayout, QWidget)
+                               QVBoxLayout, QWidget)
 
 from .. import APP_NAME
 from ..store import messages as messages_repo
 from ..store import views as views_repo
 from ..store import search as search_mod
 from ..store import tags as tags_repo
-from ..smtp import outbox as outbox_repo
+from . import autosync as autosync_mod
 from . import density as density_mod
 from . import help as help_mod
 from . import icons
 from . import menus
 from . import shortcuts as shortcuts_mod
+from . import sitesmenu
 from . import tagsdialog
 from . import theme as theme_mod
+from . import windowstatus
 from .mailpane import MailPane
 from .searchbar import SearchBar
 from .tabs import TabStrip, ViewState
@@ -75,6 +77,11 @@ class MainWindow(QMainWindow):
         self._settings = settings
         self._demo = demo
         self._engine_note = ""
+        self._store_summary = ""
+        self._site_keys: list[str] = []
+        self._cfg = settings
+        self._autosync = None
+        self._sync_frames = 0
         # None in demo mode and in the tests: there is no server behind demo
         # data, and the menu says so rather than offering a key that does
         # nothing. `app.py` supplies the real one.
@@ -91,7 +98,7 @@ class MainWindow(QMainWindow):
 
         self._build_body()
         self._build_menus()
-        self._build_status()
+        windowstatus.build(self)
 
         self.mail.status_message.connect(self.status_message.setText)
         self.mail.view_changed.connect(self._save_tab_state)
@@ -108,6 +115,8 @@ class MainWindow(QMainWindow):
         self._theme_key = theme_key or (saved if isinstance(saved, str) else None)
         self.apply_theme(self._theme_key)
         self.set_density(self._saved_density(), remember=False)
+        windowstatus.update_keyring_banner(self)
+        sitesmenu.rebuild(self, [])
 
         self.tabs.add_state(ViewState(title=self.mail.title_for_scope()))
         self._restore_geometry()
@@ -126,6 +135,11 @@ class MainWindow(QMainWindow):
         self.search.changed.connect(self.mail.set_search)
         outer.addWidget(self.search)
 
+        self.keyring_banner = QLabel("", central)
+        self.keyring_banner.setWordWrap(True)
+        self.keyring_banner.setVisible(False)
+        outer.addWidget(self.keyring_banner)
+
         self.tabs = TabStrip(central)
         outer.addWidget(self.tabs)
         outer.addWidget(self.mail, 1)
@@ -136,54 +150,14 @@ class MainWindow(QMainWindow):
         menus.build(self)
 
     # ----------------------------------------------------------------- status
-    def _build_status(self) -> None:
-        bar = QStatusBar(self)
-        self.status_message = QLabel("")
-        bar.addWidget(self.status_message, 1)
-        self.status_counts = QLabel("")
-        bar.addPermanentWidget(self.status_counts)
-        self.status_outbox = QLabel("")
-        bar.addPermanentWidget(self.status_outbox)
-        self.status_store = QLabel("")
-        bar.addPermanentWidget(self.status_store)
-        self.setStatusBar(bar)
-        self.mail.counts_changed.connect(self._counts)
-        # The pane counted before this connection existed. Same reason as the
-        # matching line in MailPane.__init__.
-        self._counts(self.mail.model.rowCount(), self.mail.model.total)
-        self._show_outbox()
-        if self._demo:
-            self.status_message.setText(
-                "Demo data. This is a disposable store in the cache directory; "
-                "your real mail store is untouched.")
-
     def _outbox_changed(self) -> None:
-        """Something was queued. Say so, and try to send it now.
-
-        Now rather than at the next scheduled sync, because a person who
-        pressed Send meant now. If a sync is already running the message goes
-        with that one; if there is no server behind this store — demo data —
-        the count stands and says what is waiting.
-        """
-        self._show_outbox()
+        """Something was queued. Say so, and try to send it now."""
+        windowstatus.show_outbox(self)
         if self._sync is not None:
             self.sync_now()
 
-    def _show_outbox(self) -> None:
-        waiting = outbox_repo.waiting(self._store)
-        self.status_outbox.setText(
-            f"{waiting} waiting to send" if waiting else "")
-
-    def _counts(self, loaded: int, total: int) -> None:
-        # NOT the number of messages in view — the list's own footer already
-        # says that, and a status bar repeating the thing directly above it is
-        # a status bar people stop reading. Unread across every visible account
-        # is the number that is not otherwise on screen.
-        unread = sum(messages_repo.unread_counts(self._store).values())
-        self.status_counts.setText(f"{unread} unread" if unread else "")
-
     def set_store_summary(self, text: str) -> None:
-        self.status_store.setText(text)
+        windowstatus.set_store_summary(self, text)
 
     def set_engine_note(self, text: str) -> None:
         self._engine_note = text
@@ -203,6 +177,8 @@ class MainWindow(QMainWindow):
         started = False
         if self._sync is not None and self._sync.start():
             started = True
+            if self._autosync is not None:
+                self._autosync.note_manual_sync()
         elif self._sync is not None:
             self.status_message.setText("A sync is already running…")
         # The calendars go with the mail: F5 means "everything, now", and a
@@ -215,18 +191,21 @@ class MainWindow(QMainWindow):
     def _sync_started(self) -> None:
         self.act_sync.setEnabled(False)
         self.status_message.setText("Fetching mail…")
+        self._set_sync_indicator(True)
 
     def _sync_finished(self, summary: str, ok: bool) -> None:
         from . import notifyhost
 
         self.act_sync.setEnabled(True)
         self.status_message.setText(summary)
-        self._show_outbox()
+        self._set_sync_indicator(False)
+        windowstatus.show_outbox(self)
         # Unconditionally, even when the sync failed: an account that failed
         # after three others succeeded still leaves three accounts' new mail on
         # the disk and not on the screen.
         self.mail.reload()
-        self._counts(self.mail.model.rowCount(), self.mail.model.total)
+        windowstatus.counts(self, self.mail.model.rowCount(),
+                            self.mail.model.total)
         notifyhost.refresh_unread(self)
 
     def start_reminders(self) -> None:
@@ -253,50 +232,11 @@ class MainWindow(QMainWindow):
         self.status_message.setText(f"{title} — {body}" if body else title)
 
     def attach_sites(self, keys, *, user_agent: str = "") -> None:
-        """Which site panels this window offers, and what they claim to be.
+        """Which site panels this window offers, and what they claim to be."""
+        sitesmenu.attach(self, keys, user_agent=user_agent)
 
-        Called once at start-up. An empty `keys` is a real answer — the panels
-        are optional, and docs/toolkit-verification.txt finding 2 is why that
-        is a requirement rather than a preference: the embedded Chromium is
-        pinned by Debian and will eventually be refused by these sites, and
-        mail and calendar must be unaffected when it is.
-        """
-        self.mail.sites.set_user_agent(user_agent)
-        self.mail.rail.set_sites(keys)
-        self._build_sites_menu(keys)
-
-    def _build_sites_menu(self, keys) -> None:
-        """The Panels menu: open one, and sign out of one.
-
-        SIGNING OUT NEEDED A SURFACE. `panels/profiles.forget` was written at
-        stage 7 and had no caller at all — the same gap `contacts.note_bounce`
-        sat in from stage 4 until stage 6, and worth closing before it becomes
-        a habit. A person who signs into WhatsApp on this machine and later
-        wants that session GONE had, until now, no way to say so from inside
-        the application.
-        """
-        from ..panels import sites as sites_mod
-
-        menu = self.sites_menu
-        menu.clear()
-        keys = [k for k in (keys or []) if sites_mod.get(k) is not None]
-        menu.menuAction().setVisible(bool(keys))
-        if not keys:
-            return
-
-        for key in keys:
-            site = sites_mod.get(key)
-            action = menu.addAction(site.name)
-            action.triggered.connect(
-                lambda _=False, k=key: self.mail.show_site(k))
-
-        menu.addSeparator()
-        out = menu.addMenu("Sign &out of")
-        for key in keys:
-            site = sites_mod.get(key)
-            action = out.addAction(f"{site.name}…")
-            action.triggered.connect(
-                lambda _=False, k=key: self.sign_out_of_site(k))
+    def _demo_tour(self) -> None:
+        sitesmenu.demo_tour(self)
 
     def sign_out_of_site(self, key: str, *, confirm=None) -> bool:
         """Destroy one site's stored session, having asked first.
@@ -373,6 +313,20 @@ class MainWindow(QMainWindow):
         self.act_sync.setStatusTip(
             shortcuts_mod.by_id("sync").description)
 
+    def attach_autosync(self, *, database_path, options,
+                        interval_minutes: int) -> None:
+        """Periodic sync from settings, and an optional idle watcher."""
+        autosync_mod.attach_to_window(
+            self, database_path=database_path, options=options,
+            interval_minutes=interval_minutes)
+
+    def _set_sync_indicator(self, syncing: bool) -> None:
+        if syncing:
+            self._sync_frames = (self._sync_frames + 1) % 4
+            self.status_sync.setText("⟳ Syncing…")
+        else:
+            self.status_sync.setText("")
+
     def attach_tray(self) -> None:
         """The system tray, when the desktop has one. Called once from app.run."""
         from . import notifyhost
@@ -385,7 +339,7 @@ class MainWindow(QMainWindow):
 
     def _about(self) -> None:
         help_mod.AboutDialog(self, engine=self._engine_note,
-                             store=self.status_store.text()).exec()
+                             store=self._store_summary).exec()
 
     # ------------------------------------------------------------------- tabs
     def _new_tab(self) -> None:
@@ -517,6 +471,7 @@ class MainWindow(QMainWindow):
         self._theme_key = theme.key
         self.mail.apply_theme(resolved)
         self.search.apply_theme(resolved)
+        windowstatus.update_keyring_banner(self)
         action = self.theme_actions.get(theme.key) if hasattr(self, "theme_actions") else None
         if action is not None:
             action.setChecked(True)
@@ -578,6 +533,8 @@ class MainWindow(QMainWindow):
         s.sync()
         if self._reminders is not None:
             self._reminders.stop()
+        if self._autosync is not None:
+            self._autosync.stop()
         # The third is the account setup thread, which exists only from the
         # first time somebody adds an account — `ui/accounthost.py` makes it
         # then — so it is asked for rather than assumed.

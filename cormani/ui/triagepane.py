@@ -80,6 +80,7 @@ class TriagePane(QWidget):
 
         self.list = QListWidget(self)
         self.list.itemActivated.connect(self._activated)
+        self.list.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         outer.addWidget(self.list, 1)
 
         bar = QWidget(self)
@@ -91,6 +92,8 @@ class TriagePane(QWidget):
         self.dismiss_button = QPushButton("No answer needed", bar)
         self.dismiss_button.clicked.connect(self._dismiss)
         row.addWidget(self.dismiss_button)
+        self.dismiss_button.setToolTip("Delete — dismiss without filing")
+        self.file_button.setToolTip("Return or Enter — file onto selected thread")
         self.undo_button = QPushButton("Undo", bar)
         self.undo_button.clicked.connect(self._undo)
         self.undo_button.setEnabled(False)
@@ -213,6 +216,23 @@ class TriagePane(QWidget):
         self.status_message.emit("Put back.")
         self.reload()
         self.changed.emit()
+
+    def keyPressEvent(self, event) -> None:
+        from PySide6.QtGui import QKeyEvent
+
+        if not isinstance(event, QKeyEvent):
+            super().keyPressEvent(event)
+            return
+        key = event.key()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._file()
+            event.accept()
+            return
+        if key in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self._dismiss()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _activated(self, item) -> None:
         self.message_activated.emit(int(item.data(Qt.ItemDataRole.UserRole)))

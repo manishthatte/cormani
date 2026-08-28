@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QTabBar
 
 from ..store import messages as messages_repo
@@ -189,3 +190,11 @@ class TabStrip(QTabBar):
     def _tab_moved(self, from_index: int, to_index: int) -> None:
         if 0 <= from_index < len(self._states):
             self._states.insert(to_index, self._states.pop(from_index))
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.MiddleButton:
+            index = self.tabAt(event.position().toPoint())
+            if index >= 0 and self.close_tab(index):
+                event.accept()
+                return
+        super().mousePressEvent(event)

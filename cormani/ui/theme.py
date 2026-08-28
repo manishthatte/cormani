@@ -88,6 +88,51 @@ SOLARIZED_DARK = Theme(
     deadline=_S["orange"], error=_S["red"],
 )
 
+# A neutral pair for readers who find Solarized dated. Same semantic roles,
+# greys and one accent rather than the full Solarized ramp.
+_NEUTRAL = {
+    "white": "#ffffff", "grey50": "#fafafa", "grey100": "#f5f5f5",
+    "grey200": "#eeeeee", "grey300": "#e0e0e0", "grey400": "#bdbdbd",
+    "grey500": "#9e9e9e", "grey600": "#757575", "grey700": "#616161",
+    "grey800": "#424242", "grey900": "#212121", "black": "#000000",
+    "blue": "#1565c0", "blue_light": "#e3f2fd",
+    "yellow": "#f9a825", "cyan": "#00838f", "orange": "#ef6c00", "red": "#c62828",
+}
+
+NEUTRAL_LIGHT = Theme(
+    key="neutral-light", name="Neutral Light", dark=False,
+    surface=_NEUTRAL["white"], surface_raised=_NEUTRAL["grey50"],
+    surface_sunken=_NEUTRAL["grey100"], border=_NEUTRAL["grey300"],
+    text=_NEUTRAL["grey800"], text_strong=_NEUTRAL["grey900"],
+    text_muted=_NEUTRAL["grey600"], text_inverse=_NEUTRAL["white"],
+    accent=_NEUTRAL["blue"], accent_muted=_NEUTRAL["blue_light"],
+    unread=_NEUTRAL["blue"], flagged=_NEUTRAL["yellow"], owed=_NEUTRAL["cyan"],
+    deadline=_NEUTRAL["orange"], error=_NEUTRAL["red"],
+)
+
+NEUTRAL_DARK = Theme(
+    key="neutral-dark", name="Neutral Dark", dark=True,
+    surface=_NEUTRAL["grey900"], surface_raised=_NEUTRAL["grey800"],
+    surface_sunken=_NEUTRAL["grey800"], border=_NEUTRAL["grey700"],
+    text=_NEUTRAL["grey200"], text_strong=_NEUTRAL["white"],
+    text_muted=_NEUTRAL["grey500"], text_inverse=_NEUTRAL["grey900"],
+    accent="#42a5f5", accent_muted="#1e3a5f",
+    unread="#42a5f5", flagged=_NEUTRAL["yellow"], owed="#26c6da",
+    deadline=_NEUTRAL["orange"], error="#ef5350",
+)
+
+# WCAG-oriented pairs for readers who need stronger contrast than Solarized
+# gives on its own. Still semantic roles, not literal colour names in widgets.
+HIGH_CONTRAST = Theme(
+    key="high-contrast", name="High Contrast", dark=True,
+    surface="#000000", surface_raised="#1a1a1a", surface_sunken="#1a1a1a",
+    border="#ffffff", text="#ffffff", text_strong="#ffffff",
+    text_muted="#cccccc", text_inverse="#000000",
+    accent="#ffff00", accent_muted="#333300",
+    unread="#00ffff", flagged="#ffff00", owed="#00ffff",
+    deadline="#ff9900", error="#ff4444",
+)
+
 # Not a palette: a marker meaning "do not touch the palette at all". Applying it
 # leaves whatever the desktop chose, including a high-contrast scheme.
 SYSTEM = Theme(
@@ -98,7 +143,9 @@ SYSTEM = Theme(
     unread="", flagged="", owed="", deadline="", error="",
 )
 
-THEMES: dict[str, Theme] = {t.key: t for t in (SOLARIZED_LIGHT, SOLARIZED_DARK, SYSTEM)}
+THEMES: dict[str, Theme] = {t.key: t for t in (
+    SOLARIZED_LIGHT, SOLARIZED_DARK, NEUTRAL_LIGHT, NEUTRAL_DARK,
+    HIGH_CONTRAST, SYSTEM)}
 
 DEFAULT_THEME = SOLARIZED_LIGHT.key
 
